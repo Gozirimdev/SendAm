@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "license": "MIT",
   "description": "SendAm - WhatsApp-based Stellar payment MVP",
+  "homepage": "https://send-am-web.vercel.app/",
   "workspaces": [
     "apps/*"
   ],

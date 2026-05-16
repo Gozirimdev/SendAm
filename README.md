@@ -4,6 +4,12 @@ WhatsApp-first payments powered by the Stellar network.
 
 SendAm is a financial access MVP that lets people create a Stellar wallet, check their XLM balance, and send XLM using simple WhatsApp messages. The goal is to make blockchain payments feel as familiar as sending a chat message, especially for users who may not be comfortable with browser wallets, seed phrases, or exchange-style interfaces.
 
+## Live Links
+
+- Web app: https://send-am-web.vercel.app/
+- API: https://send-am-api.vercel.app/
+- Repository: https://github.com/Gozirimdev/SendAm
+
 > Current status: MVP running on Stellar Testnet. This repository is not yet configured for real-money production use.
 
 ## Why SendAm
