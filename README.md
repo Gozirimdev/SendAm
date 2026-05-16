@@ -373,3 +373,7 @@ The project is intentionally scoped: it proves wallet creation, balance checks, 
 ## License
 
 SendAm is open source and released under the MIT License. See `LICENSE` for details.
+
+## Contributing
+
+Contributions are welcome. See `CONTRIBUTING.md` for setup instructions, contribution areas, pull request guidelines, and security notes.
