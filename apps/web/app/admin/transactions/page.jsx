@@ -33,6 +33,16 @@ export default function AdminTransactions() {
         {row.destination ? `${row.destination.substring(0, 8)}...` : '-'}
       </span>
     )},
+    { header: 'Receipt', render: (row) => row.explorerUrl ? (
+      <a
+        href={row.explorerUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="text-primary hover:underline text-sm font-medium"
+      >
+        View
+      </a>
+    ) : '-' },
     { header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { header: 'Date', render: (row) => formatDate(row.createdAt) },
   ];

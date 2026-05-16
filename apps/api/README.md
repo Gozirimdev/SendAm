@@ -12,7 +12,10 @@ The SendAm backend is the payment engine behind the WhatsApp-first Stellar walle
 - Encrypts and stores Stellar secret keys.
 - Funds new Testnet wallets using Stellar Friendbot.
 - Checks native XLM balances through Stellar Horizon.
+- Saves recipient aliases for repeat payments.
+- Requires WhatsApp confirmation before submitting a transfer.
 - Builds, signs, and submits XLM payment transactions.
+- Returns Stellar Expert receipt links after successful transfers.
 - Stores users, wallets, and transactions in MongoDB.
 - Provides REST endpoints for the Next.js wallet simulator.
 - Provides admin endpoints for dashboard statistics and tables.
@@ -39,7 +42,12 @@ hello
 help
 create wallet
 balance
+save ada GABC...
+contacts
+send 5 xlm ada
 send 5 xlm GABC...
+yes
+no
 ```
 
 ## Main Flow
@@ -63,13 +71,15 @@ send 5 xlm GABC...
 
 ### XLM Transfer
 
-1. User sends `send <amount> xlm <destination>`.
-2. Backend parses the amount and destination public key.
-3. Backend decrypts the stored Stellar secret key.
-4. Backend builds and signs a Stellar payment transaction.
-5. Transaction is submitted to Stellar Horizon.
-6. Transaction status and hash are stored in MongoDB.
-7. User receives a WhatsApp success or failure message.
+1. User sends `send <amount> xlm <destination>` or `send <amount> xlm <saved-name>`.
+2. Backend parses the amount and resolves the destination public key.
+3. Backend sends a confirmation prompt to the user.
+4. User replies `YES` to send or `NO` to cancel.
+5. Backend decrypts the stored Stellar secret key.
+6. Backend builds and signs a Stellar payment transaction.
+7. Transaction is submitted to Stellar Horizon.
+8. Transaction status, hash, and Stellar Expert receipt link are stored in MongoDB.
+9. User receives a WhatsApp success or failure message.
 
 ## Tech Stack
 
@@ -244,6 +254,6 @@ Before production launch, this backend needs:
 
 ## Reviewer Summary
 
-This backend proves the most important SendAm concept: a user can interact with Stellar payments through WhatsApp. It demonstrates wallet creation, Testnet funding, balance lookup, XLM transfer submission, transaction storage, and admin observability.
+This backend proves the most important SendAm concept: a user can interact with Stellar payments through WhatsApp. It demonstrates wallet creation, Testnet funding, balance lookup, saved recipients, confirmation-based XLM transfer submission, transaction receipts, transaction storage, and admin observability.
 
 The next major step is hardening the system for real users through authentication, validation, testing, monitoring, and compliance review.

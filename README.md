@@ -40,7 +40,12 @@ SendAm has three main surfaces:
    ```text
    create wallet
    balance
+   save ada GABC...
+   contacts
+   send 5 xlm ada
    send 5 xlm GABC...
+   yes
+   no
    help
    ```
 
@@ -58,6 +63,9 @@ SendAm has three main surfaces:
 - Automatically fund new test wallets using Stellar Friendbot.
 - Check XLM balance by sending `balance`.
 - Send XLM to another Stellar public address.
+- Confirm transfers before funds are submitted to Stellar.
+- Save contacts with aliases for repeat payments.
+- Receive Stellar Expert receipt links after successful transfers.
 - Receive simple WhatsApp replies for successful and failed actions.
 
 ### Admin Features
@@ -160,12 +168,14 @@ SendAm/
 
 ### XLM Transfer
 
-1. User sends a command like `send 5 xlm GABC...`.
-2. Backend parses amount and destination.
-3. Backend decrypts the user's stored Stellar secret key.
-4. Backend builds, signs, and submits a Stellar payment transaction.
-5. Transaction result is saved in MongoDB.
-6. User receives success or failure feedback on WhatsApp.
+1. User sends a command like `send 5 xlm GABC...` or `send 5 xlm ada`.
+2. Backend parses amount and destination, or resolves a saved contact alias.
+3. Backend sends a confirmation prompt to the user.
+4. User replies `YES` to approve or `NO` to cancel.
+5. Backend decrypts the user's stored Stellar secret key.
+6. Backend builds, signs, and submits a Stellar payment transaction.
+7. Transaction result and Stellar Expert receipt link are saved in MongoDB.
+8. User receives success or failure feedback on WhatsApp.
 
 ## API Summary
 
@@ -326,15 +336,15 @@ This project is still an MVP. Before any production or real-money launch, the fo
 
 - Real admin authentication.
 - Stronger validation for wallet and payment requests.
-- Better WhatsApp command handling and error messages.
+- Better WhatsApp command handling, confirmation prompts, and error messages.
 - Automated tests for parser, wallet, webhook, and transaction flows.
 - Deployment configuration for backend, frontend, database, and environment variables.
 
 ### Stellar Product Expansion
 
 - Support custom Stellar assets.
-- Add contact aliases so users can send to saved recipients.
-- Add transaction receipts with Stellar explorer links.
+- Expand contact aliases into richer recipient management.
+- Add richer transaction receipts with Stellar explorer links.
 - Add QR-code public key sharing.
 - Add low-balance warnings and safer confirmation flows.
 - Explore anchor integrations for fiat on/off ramps.
@@ -352,7 +362,7 @@ This project is still an MVP. Before any production or real-money launch, the fo
 
 SendAm demonstrates a practical Stellar use case: making blockchain payments accessible through a communication channel people already use every day. The MVP combines WhatsApp, Stellar Testnet, MongoDB, and a Next.js admin dashboard to show the foundation for a chat-based payment product.
 
-The project is intentionally scoped: it proves wallet creation, balance checks, and XLM transfer flows first. With stronger authentication, validation, compliance work, and production deployment, SendAm can evolve from a Testnet MVP into a broader payments product for mobile-first users.
+The project is intentionally scoped: it proves wallet creation, balance checks, saved recipients, confirmation-based XLM transfers, and auditable Stellar receipts first. With stronger authentication, validation, compliance work, and production deployment, SendAm can evolve from a Testnet MVP into a broader payments product for mobile-first users.
 
 ## License
 

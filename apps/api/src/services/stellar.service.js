@@ -11,6 +11,15 @@ const createKeypair = () => {
   };
 };
 
+const isValidPublicKey = (publicKey) => {
+  return StellarSdk.StrKey.isValidEd25519PublicKey(publicKey);
+};
+
+const getTransactionUrl = (txHash) => {
+  const network = config.stellar.network === 'testnet' ? 'testnet' : 'public';
+  return `https://stellar.expert/explorer/${network}/tx/${txHash}`;
+};
+
 const fundAccount = async (publicKey) => {
   try {
     const response = await axios.get(`https://friendbot.stellar.org?addr=${encodeURIComponent(publicKey)}`);
@@ -34,6 +43,15 @@ const getBalance = async (publicKey) => {
 
 const sendXlm = async (secretKey, destination, amount) => {
   try {
+    if (!isValidPublicKey(destination)) {
+      throw new Error('Destination must be a valid Stellar public key.');
+    }
+
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      throw new Error('Amount must be greater than zero.');
+    }
+
     const sourceKeypair = StellarSdk.Keypair.fromSecret(secretKey);
     const sourcePublicKey = sourceKeypair.publicKey();
     
@@ -77,6 +95,8 @@ const sendXlm = async (secretKey, destination, amount) => {
 module.exports = {
   createKeypair,
   fundAccount,
+  getTransactionUrl,
   getBalance,
+  isValidPublicKey,
   sendXlm,
 };

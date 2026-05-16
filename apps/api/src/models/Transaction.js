@@ -25,6 +25,9 @@ const transactionSchema = new mongoose.Schema({
   txHash: {
     type: String,
   },
+  explorerUrl: {
+    type: String,
+  },
   status: {
     type: String,
     enum: ['pending', 'success', 'failed'],
