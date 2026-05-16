@@ -1,5 +1,5 @@
 const { createWalletForUser, getWalletByPhoneNumber, getWalletByUserId } = require('../services/account.service');
-const { getBalance, sendToken, fundAccount } = require('../services/chain.service');
+const { getBalance, getTransactionUrl, sendToken, fundAccount } = require('../services/chain.service');
 const { decrypt } = require('../services/secretStore');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
@@ -71,6 +71,7 @@ const sendFunds = async (req, res, next) => {
 
     const secretKey = decrypt(wallet.walletReference);
     const txResponse = await sendToken(secretKey, destination, amount);
+    const explorerUrl = getTransactionUrl(txResponse.hash);
 
     await Transaction.create({
       userId: user._id,
@@ -79,10 +80,14 @@ const sendFunds = async (req, res, next) => {
       asset: 'TOKEN',
       destination,
       txHash: txResponse.hash,
+      explorerUrl,
       status: 'success'
     });
 
-    return sendSuccess(res, { txHash: txResponse.hash }, 'Transaction successful');
+    return sendSuccess(res, {
+      txHash: txResponse.hash,
+      explorerUrl
+    }, 'Transaction successful');
   } catch (error) {
     // Record failed transaction if user is found
     if (req.body.phoneNumber) {

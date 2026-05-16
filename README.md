@@ -40,7 +40,12 @@ SendAm has three main surfaces:
    ```text
    create wallet
    balance
+   save ada GABC...
+   contacts
+   send 5 token ada
    send 5 token GABC...
+   yes
+   no
    help
    ```
 
@@ -58,6 +63,9 @@ SendAm has three main surfaces:
 - Automatically fund new test wallets using chain faucet.
 - Check TOKEN balance by sending `balance`.
 - Send TOKEN to another chain public address.
+- Confirm transfers before funds are submitted to chain.
+- Save contacts with aliases for repeat payments.
+- Receive chain Expert receipt links after successful transfers.
 - Receive simple WhatsApp replies for successful and failed actions.
 
 ### Admin Features
@@ -160,12 +168,14 @@ SendAm/
 
 ### TOKEN Transfer
 
-1. User sends a command like `send 5 token GABC...`.
-2. Backend parses amount and destination.
-3. Backend decrypts the user's stored chain reference.
-4. Backend builds, signs, and submits a chain payment transaction.
-5. Transaction result is saved in MongoDB.
-6. User receives success or failure feedback on WhatsApp.
+1. User sends a command like `send 5 token GABC...` or `send 5 token ada`.
+2. Backend parses amount and destination, or resolves a saved contact alias.
+3. Backend sends a confirmation prompt to the user.
+4. User replies `YES` to approve or `NO` to cancel.
+5. Backend decrypts the user's stored chain reference.
+6. Backend builds, signs, and submits a chain payment transaction.
+7. Transaction result and chain Expert receipt link are saved in MongoDB.
+8. User receives success or failure feedback on WhatsApp.
 
 ## API Summary
 
@@ -326,15 +336,15 @@ This project is still an MVP. Before any production or real-money launch, the fo
 
 - Real admin authentication.
 - Stronger validation for wallet and payment requests.
-- Better WhatsApp command handling and error messages.
+- Better WhatsApp command handling, confirmation prompts, and error messages.
 - Automated tests for parser, wallet, webhook, and transaction flows.
 - Deployment configuration for backend, frontend, database, and environment variables.
 
 ### chain Product Expansion
 
 - Support custom chain assets.
-- Add contact aliases so users can send to saved recipients.
-- Add transaction receipts with chain explorer links.
+- Expand contact aliases into richer recipient management.
+- Add richer transaction receipts with chain explorer links.
 - Add QR-code public key sharing.
 - Add low-balance warnings and safer confirmation flows.
 - Explore anchor integrations for fiat on/off ramps.
@@ -352,7 +362,7 @@ This project is still an MVP. Before any production or real-money launch, the fo
 
 SendAm demonstrates a practical chain use case: making blockchain payments accessible through a communication channel people already use every day. The MVP combines WhatsApp, chain Testnet, MongoDB, and a Next.js admin dashboard to show the foundation for a chat-based payment product.
 
-The project is intentionally scoped: it proves wallet creation, balance checks, and TOKEN transfer flows first. With stronger authentication, validation, compliance work, and production deployment, SendAm can evolve from a Testnet MVP into a broader payments product for mobile-first users.
+The project is intentionally scoped: it proves wallet creation, balance checks, saved recipients, confirmation-based TOKEN transfers, and auditable chain receipts first. With stronger authentication, validation, compliance work, and production deployment, SendAm can evolve from a Testnet MVP into a broader payments product for mobile-first users.
 
 ## License
 
