@@ -12,9 +12,6 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center py-20 px-4">
       <div className="text-center max-w-3xl mx-auto mb-16">
-        <div className="inline-block bg-secondary text-primary font-medium px-4 py-1.5 rounded-full mb-6 border border-teal-100">
-          Stellar Testnet MVP
-        </div>
         <h1 className="text-5xl md:text-6xl font-extrabold text-dark tracking-tight mb-6 leading-tight">
           Crypto Payments via <span className="text-primary">WhatsApp</span>
         </h1>
