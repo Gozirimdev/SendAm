@@ -41,7 +41,18 @@ const getBalance = async (publicKey) => {
   }
 };
 
-const sendXlm = async (secretKey, destination, amount) => {
+// Resolve an asset code to a Stellar SDK Asset. Native XLM is the only
+// asset wired today; this is the seam where future assets (e.g. USDC and
+// other anchor-issued assets used by on/off-ramps and swaps) get added by
+// mapping a code+issuer instead of throwing.
+const resolveAsset = (asset) => {
+  if (!asset || asset === 'XLM' || asset === 'native') {
+    return StellarSdk.Asset.native();
+  }
+  throw new Error(`Unsupported asset: ${asset}`);
+};
+
+const sendPayment = async ({ secretKey, destination, amount, asset = 'XLM' }) => {
   try {
     if (!isValidPublicKey(destination)) {
       throw new Error('Destination must be a valid Stellar public key.');
@@ -54,10 +65,10 @@ const sendXlm = async (secretKey, destination, amount) => {
 
     const sourceKeypair = StellarSdk.Keypair.fromSecret(secretKey);
     const sourcePublicKey = sourceKeypair.publicKey();
-    
+
     // Load source account to get current sequence number
     const sourceAccount = await server.loadAccount(sourcePublicKey);
-    
+
     // Check if destination exists
     try {
       await server.loadAccount(destination);
@@ -67,14 +78,14 @@ const sendXlm = async (secretKey, destination, amount) => {
 
     // Build the transaction
     const fee = await server.fetchBaseFee();
-    
+
     const transaction = new StellarSdk.TransactionBuilder(sourceAccount, {
       fee,
       networkPassphrase: config.stellar.network === 'testnet' ? StellarSdk.Networks.TESTNET : StellarSdk.Networks.PUBLIC,
     })
       .addOperation(StellarSdk.Operation.payment({
         destination,
-        asset: StellarSdk.Asset.native(),
+        asset: resolveAsset(asset),
         amount: amount.toString(),
       }))
       .setTimeout(30)
@@ -87,8 +98,8 @@ const sendXlm = async (secretKey, destination, amount) => {
     const response = await server.submitTransaction(transaction);
     return response;
   } catch (error) {
-    logger.error('Error sending XLM', error.message);
-    throw new Error(error.message || 'Failed to send XLM');
+    logger.error('Error sending payment', error.message);
+    throw new Error(error.message || 'Failed to send payment');
   }
 };
 
@@ -98,5 +109,6 @@ module.exports = {
   getTransactionUrl,
   getBalance,
   isValidPublicKey,
-  sendXlm,
+  resolveAsset,
+  sendPayment,
 };

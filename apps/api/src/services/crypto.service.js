@@ -2,10 +2,13 @@ const crypto = require('crypto');
 const config = require('../config/env');
 
 const IV_LENGTH = 16;
-// Need to ensure the key is 32 bytes for aes-256-cbc.
-// We expect a 64 char hex string from the environment variable ENCRYPTION_KEY,
-// which we parse as a buffer of 32 bytes.
-const ENCRYPTION_KEY = Buffer.from(config.encryptionKey || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', 'hex');
+// aes-256-cbc needs a 32-byte key. ENCRYPTION_KEY must be a 64-char hex
+// string. No fallback: a missing/short key must fail loudly rather than
+// silently encrypt wallet secrets with a guessable default.
+if (!config.encryptionKey || Buffer.from(config.encryptionKey, 'hex').length !== 32) {
+  throw new Error('ENCRYPTION_KEY must be set to a 64-character hex string (32 bytes). Generate one with: openssl rand -hex 32');
+}
+const ENCRYPTION_KEY = Buffer.from(config.encryptionKey, 'hex');
 
 const encrypt = (text) => {
   const iv = crypto.randomBytes(IV_LENGTH);

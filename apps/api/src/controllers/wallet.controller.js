@@ -1,14 +1,14 @@
 const { createWalletForUser, getWalletByPhoneNumber, getWalletByUserId } = require('../services/wallet.service');
-const { getBalance, getTransactionUrl, sendXlm, fundAccount } = require('../services/stellar.service');
-const { decrypt } = require('../services/crypto.service');
+const { getBalance, fundAccount, isValidPublicKey } = require('../services/stellar.service');
+const { executeSend } = require('../services/transaction.service');
+const { isValidPhoneNumber, isValidAmount } = require('../utils/validators');
 const User = require('../models/User');
-const Transaction = require('../models/Transaction');
 const { sendSuccess, sendError } = require('../utils/response');
 
 const createWallet = async (req, res, next) => {
   try {
     const { phoneNumber } = req.body;
-    if (!phoneNumber) return sendError(res, 'Phone number is required');
+    if (!isValidPhoneNumber(phoneNumber)) return sendError(res, 'A valid phone number is required');
 
     let user = await User.findOne({ phoneNumber });
     if (!user) {
@@ -17,10 +17,10 @@ const createWallet = async (req, res, next) => {
 
     try {
       const wallet = await createWalletForUser(user._id);
-      
+
       // Attempt to fund testnet
       await fundAccount(wallet.publicKey);
-      
+
       return sendSuccess(res, {
         publicKey: wallet.publicKey,
         network: wallet.network
@@ -43,7 +43,7 @@ const createWallet = async (req, res, next) => {
 const checkBalance = async (req, res, next) => {
   try {
     const { phone } = req.params;
-    if (!phone) return sendError(res, 'Phone number is required');
+    if (!isValidPhoneNumber(phone)) return sendError(res, 'A valid phone number is required');
 
     const wallet = await getWalletByPhoneNumber(phone);
     if (!wallet) return sendError(res, 'Wallet not found for this phone number', 404);
@@ -58,9 +58,12 @@ const checkBalance = async (req, res, next) => {
 const sendFunds = async (req, res, next) => {
   try {
     const { phoneNumber, amount, destination } = req.body;
-    
-    if (!phoneNumber || !amount || !destination) {
-      return sendError(res, 'Phone number, amount, and destination are required');
+
+    if (!isValidPhoneNumber(phoneNumber) || !isValidAmount(amount) || !destination) {
+      return sendError(res, 'A valid phone number, amount, and destination are required');
+    }
+    if (!isValidPublicKey(destination)) {
+      return sendError(res, 'Destination must be a valid Stellar public key');
     }
 
     const user = await User.findOne({ phoneNumber });
@@ -69,41 +72,17 @@ const sendFunds = async (req, res, next) => {
     const wallet = await getWalletByUserId(user._id);
     if (!wallet) return sendError(res, 'Wallet not found', 404);
 
-    const secretKey = decrypt(wallet.encryptedSecretKey);
-    const txResponse = await sendXlm(secretKey, destination, amount);
-    const explorerUrl = getTransactionUrl(txResponse.hash);
-
-    await Transaction.create({
-      userId: user._id,
-      type: 'send',
-      amount,
-      asset: 'XLM',
-      destination,
-      txHash: txResponse.hash,
-      explorerUrl,
-      status: 'success'
-    });
+    const result = await executeSend({ user, wallet, destination, amount, asset: 'XLM' });
+    if (!result.ok) {
+      return sendError(res, result.error.message || 'Transaction failed');
+    }
 
     return sendSuccess(res, {
-      txHash: txResponse.hash,
-      explorerUrl
+      txHash: result.txHash,
+      explorerUrl: result.explorerUrl
     }, 'Transaction successful');
   } catch (error) {
-    // Record failed transaction if user is found
-    if (req.body.phoneNumber) {
-      const user = await User.findOne({ phoneNumber: req.body.phoneNumber });
-      if (user) {
-        await Transaction.create({
-          userId: user._id,
-          type: 'send',
-          amount: req.body.amount || '0',
-          destination: req.body.destination || 'unknown',
-          status: 'failed'
-        });
-      }
-    }
-    
-    return sendError(res, error.message || 'Transaction failed');
+    next(error);
   }
 };
 
