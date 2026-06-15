@@ -1,4 +1,10 @@
-const parseCommand = (text) => {
+// Classifies an inbound WhatsApp message into an intent the handler can
+// dispatch on. Keep this purely about recognising intent + extracting a
+// payload; all side effects belong in the handlers. New flows (e.g. buy,
+// withdraw, swap) are added here as new intent types, then wired into the
+// handler's dispatch map.
+
+const parseIntent = (text) => {
   const trimmedText = text.trim();
   const normalizedText = trimmedText.toLowerCase();
 
@@ -49,14 +55,13 @@ const parseCommand = (text) => {
     const parts = trimmedText.split(/\s+/);
     // format: send 5 token GABC... or send 5 token ada
     if (parts.length >= 4 && parts[2].toLowerCase() === 'token') {
-      const amount = parts[1];
-      const recipient = parts[3];
-      return { 
-        type: 'SEND_TOKEN', 
+      return {
+        type: 'SEND',
         payload: {
-          amount,
-          recipient,
-        } 
+          amount: parts[1],
+          asset: 'TOKEN',
+          recipient: parts[3],
+        },
       };
     }
     return { type: 'INVALID_SEND', payload: null };
@@ -66,5 +71,5 @@ const parseCommand = (text) => {
 };
 
 module.exports = {
-  parseCommand
+  parseIntent,
 };

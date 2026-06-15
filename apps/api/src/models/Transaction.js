@@ -6,9 +6,11 @@ const transactionSchema = new mongoose.Schema({
     ref: 'User',
     required: true,
   },
+  // 'send'/'receive' are wired today. The extra values reserve room for
+  // on/off-ramp and swap flows so adding them needs no schema migration.
   type: {
     type: String,
-    enum: ['send', 'receive'],
+    enum: ['send', 'receive', 'swap', 'onramp', 'offramp'],
     required: true,
   },
   amount: {
