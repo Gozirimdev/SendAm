@@ -2,6 +2,8 @@ const { processMessage } = require('../services/agent/handler');
 const { sendTextMessage } = require('../services/whatsapp.service');
 const { replies } = require('../services/agent/replies');
 const ProcessedMessage = require('../models/ProcessedMessage');
+const { consume } = require('../services/rateLimit.service');
+const config = require('../config/env');
 const logger = require('../utils/logger');
 
 /**
@@ -39,6 +41,19 @@ const handleIncomingMessage = async (req, res) => {
 
     const from = message.from;
     const whatsappName = value?.contacts?.[0]?.profile?.name || '';
+
+    // Per-sender throttle. We don't 429 here (that would make Meta retry and
+    // flag the webhook unhealthy) — instead we drop excess messages, warning
+    // the sender once at the threshold and staying quiet after that.
+    const { botMax, botWindowMs } = config.rateLimit;
+    const { totalHits } = await consume(`wa:${from}`, botWindowMs);
+    if (totalHits > botMax) {
+      logger.warn(`Throttling WhatsApp sender ${from} (${totalHits} msgs in window)`);
+      if (totalHits === botMax + 1) {
+        sendTextMessage(from, replies.rateLimited());
+      }
+      return;
+    }
 
     processMessage(from, whatsappName, message.text.body).catch((err) => {
       logger.error(`Error processing command for ${from}:`, err);
