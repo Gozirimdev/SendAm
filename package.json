@@ -5,12 +5,16 @@
   "description": "SendAm - WhatsApp-based Stellar payment MVP",
   "homepage": "https://send-am-web.vercel.app/",
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
     "dev:api": "npm run dev --workspace=apps/api",
-    "dev:web": "npm run dev --workspace=apps/web",
-    "dev": "npm run dev:api & npm run dev:web",
+    "dev:landing": "npm run dev --workspace=apps/landing",
+    "dev:admin": "npm run dev --workspace=apps/admin",
+    "dev": "npm run dev:api & npm run dev:landing & npm run dev:admin",
+    "build:landing": "npm run build --workspace=apps/landing",
+    "build:admin": "npm run build --workspace=apps/admin",
     "install:all": "npm install"
   }
 }
