@@ -1,4 +1,37 @@
 import api from '@shared/api';
+import { getToken, setToken, removeToken } from './auth';
+
+// Attach the admin token to every request and centralise session expiry: any
+// 401 from the API clears the token and bounces the user back to /login.
+api.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      removeToken();
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export const adminLogin = async (password) => {
+  const { data } = await api.post('/admin/login', { password });
+  const token = data?.data?.token;
+  if (token) {
+    setToken(token);
+  }
+  return token;
+};
 
 export const getAdminStats = async () => {
   const { data } = await api.get('/admin/stats');

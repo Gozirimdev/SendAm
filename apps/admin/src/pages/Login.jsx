@@ -1,20 +1,30 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { setToken } from '@/lib/auth';
+import { adminLogin } from '@/lib/adminApi';
 import { Lock } from 'lucide-react';
 
 export default function Login() {
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Mock login - in a real app, verify via API
-    if (password === 'admin123') {
-      setToken('mock-jwt-token-for-admin');
-      navigate('/');
-    } else {
-      alert('Invalid password. Hint: admin123');
+    setError('');
+    setLoading(true);
+    try {
+      const token = await adminLogin(password);
+      if (token) {
+        navigate('/');
+      } else {
+        setError('Login failed. Please try again.');
+      }
+    } catch (err) {
+      const message = err.response?.data?.message || 'Invalid credentials';
+      setError(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -40,11 +50,15 @@ export default function Login() {
               placeholder="Enter password"
             />
           </div>
+          {error && (
+            <p className="text-sm text-red-600 text-center">{error}</p>
+          )}
           <button
             type="submit"
-            className="w-full bg-dark hover:bg-gray-800 text-white font-medium py-3 rounded-lg transition-colors"
+            disabled={loading}
+            className="w-full bg-dark hover:bg-gray-800 text-white font-medium py-3 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Sign In
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
       </div>

@@ -1,10 +1,23 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
+const requireAdmin = require('../middlewares/requireAdmin');
 
-router.get('/stats', adminController.getStats);
-router.get('/users', adminController.getUsers);
-router.get('/wallets', adminController.getWallets);
-router.get('/transactions', adminController.getTransactions);
+// Tighter limiter on the credential endpoint to slow password brute-forcing,
+// independent of the broader /api limiter.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: 'Too many login attempts. Try again later.' },
+});
+
+router.post('/login', loginLimiter, adminController.login);
+
+// Everything below requires a valid admin token.
+router.get('/stats', requireAdmin, adminController.getStats);
+router.get('/users', requireAdmin, adminController.getUsers);
+router.get('/wallets', requireAdmin, adminController.getWallets);
+router.get('/transactions', requireAdmin, adminController.getTransactions);
 
 module.exports = router;

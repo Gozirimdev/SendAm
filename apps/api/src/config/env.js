@@ -5,6 +5,11 @@ module.exports = {
   env: process.env.NODE_ENV || 'development',
   mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/sendam',
   encryptionKey: process.env.SERVICE_SECRET,
+  admin: {
+    password: process.env.ADMIN_PASSWORD,
+    jwtSecret: process.env.JWT_SECRET,
+    sessionTtlHours: Number(process.env.ADMIN_SESSION_TTL_HOURS || 12),
+  },
   whatsapp: {
     token: process.env.WHATSAPP_TOKEN,
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,

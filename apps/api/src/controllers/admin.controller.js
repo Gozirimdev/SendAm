@@ -1,7 +1,21 @@
 const User = require('../models/User');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
-const { sendSuccess } = require('../utils/response');
+const { sendSuccess, sendError } = require('../utils/response');
+const { verifyPassword, createToken } = require('../services/adminAuth.service');
+
+const login = async (req, res, next) => {
+  try {
+    const { password } = req.body || {};
+    if (!verifyPassword(password)) {
+      return sendError(res, 'Invalid credentials', 401);
+    }
+    const token = createToken();
+    return sendSuccess(res, { token }, 'Login successful');
+  } catch (error) {
+    next(error);
+  }
+};
 
 const getStats = async (req, res, next) => {
   try {
@@ -52,6 +66,7 @@ const getTransactions = async (req, res, next) => {
 };
 
 module.exports = {
+  login,
   getStats,
   getUsers,
   getWallets,
