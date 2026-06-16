@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Send, MessageCircle } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { ADMIN_URL, whatsappUrl } from '@/lib/links.js';
 
 export default function Navbar() {
@@ -10,7 +10,7 @@ export default function Navbar() {
           to="/"
           className="flex shrink-0 items-center gap-2 text-lg font-bold text-primary sm:text-xl"
         >
-          <Send className="h-6 w-6 shrink-0" aria-hidden="true" />
+          <img src="/logo-sent-mark.svg" alt="" className="h-7 w-7 shrink-0" aria-hidden="true" />
           <span>SendAm</span>
         </Link>
 
@@ -25,25 +25,16 @@ export default function Navbar() {
             FAQ
           </a>
         </div>
-
-        <div className="flex items-center gap-3 sm:gap-5">
-          <a
-            href={ADMIN_URL}
-            className="text-sm font-medium text-slate-500 transition-colors hover:text-primary"
-          >
-            Admin
-          </a>
-          <a
-            href={whatsappUrl('create wallet')}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-whatsapp focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-whatsapp"
-          >
-            <MessageCircle size={16} aria-hidden="true" />
-            <span className="hidden sm:inline">Open WhatsApp</span>
-            <span className="sm:hidden">Start</span>
-          </a>
-        </div>
+        <a
+          href={whatsappUrl('create wallet')}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-whatsapp focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-whatsapp"
+        >
+          <MessageCircle size={16} aria-hidden="true" />
+          <span className="hidden sm:inline">Open WhatsApp</span>
+          <span className="sm:hidden">Start</span>
+        </a>
       </div>
     </nav>
   );

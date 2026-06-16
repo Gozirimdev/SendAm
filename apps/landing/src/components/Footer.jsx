@@ -1,4 +1,3 @@
-import { Send } from 'lucide-react';
 import { ADMIN_URL, GITHUB_URL, STELLAR_URL, whatsappUrl } from '@/lib/links.js';
 
 const columns = [
@@ -26,7 +25,7 @@ export default function Footer() {
       <div className="container mx-auto grid gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.5fr_1fr_1fr]">
         <div>
           <div className="flex items-center gap-2 text-lg font-bold text-primary">
-            <Send className="h-5 w-5" aria-hidden="true" />
+            <img src="/logo-sent-mark.svg" alt="" className="h-6 w-6" aria-hidden="true" />
             <span>SendAm</span>
           </div>
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-slate-500">
