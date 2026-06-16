@@ -30,8 +30,8 @@ export default function ChatMockup() {
       <div className="flex h-full flex-col bg-[#ece5dd] bg-[url('/whatsapp-bg.png')] bg-cover bg-center">
         {/* Chat header — top padding clears the floating status bar */}
         <div className="flex items-center gap-3 bg-whatsapp-dark px-4 pb-3 pt-10 text-white">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 font-bold">
-            S
+          <div className="flex h-9 w-9 items-center justify-center rounded-full overflow-hidden font-bold">
+            <img src="/logo-sent.svg" alt="" className="h-full w-full object-cover" />
           </div>
           <div className="leading-tight">
             <p className="text-sm font-semibold">SendAm</p>
