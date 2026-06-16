@@ -349,6 +349,7 @@ This project is still an MVP. Some hardening is already in place:
 - Inbound message idempotency to prevent duplicate transfers from webhook retries.
 - Per-user transfer guardrails: per-transaction cap plus rolling 24h amount and count limits.
 - CORS restricted to a configured origin allowlist in production.
+- Mongo-backed rate limiting (shared across instances): per-IP on the REST API and per-sender on the WhatsApp webhook.
 
 Still required before a real-money launch:
 
@@ -357,7 +358,6 @@ Still required before a real-money launch:
 - Add audit logs for sensitive actions and monitoring/alerting.
 - Add an automated test suite (parser, wallet, webhook, transaction flows).
 - Replace the single shared admin password with real admin accounts and roles.
-- Use a shared-store rate limiter (the in-memory limiter is ineffective across serverless instances).
 - Complete legal, compliance, KYC, AML, and custody review where required.
 
 ## Current Limitations
@@ -366,7 +366,6 @@ Still required before a real-money launch:
 - Supports native TOKEN transfers only.
 - WhatsApp command parser is intentionally simple.
 - Single shared admin password (no per-admin accounts or roles yet).
-- Rate limiting uses an in-memory store, so it is not effective across multiple/serverless instances.
 - No customer web signup is required yet because WhatsApp phone number is the MVP identity.
 - No production compliance workflow is included yet.
 
