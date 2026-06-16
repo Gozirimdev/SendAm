@@ -1,19 +1,47 @@
 import { Link } from 'react-router-dom';
-import { Send } from 'lucide-react';
-
-const ADMIN_URL = import.meta.env.VITE_ADMIN_URL || 'http://localhost:3001';
+import { Send, MessageCircle } from 'lucide-react';
+import { ADMIN_URL, whatsappUrl } from '@/lib/links.js';
 
 export default function Navbar() {
   return (
-    <nav className="bg-white border-b border-gray-100 py-3 sm:py-4 sticky top-0 z-50">
-      <div className="container mx-auto px-4 sm:px-6 flex justify-between items-center gap-4">
-        <Link to="/" className="flex items-center gap-2 text-primary font-bold text-lg sm:text-xl shrink-0">
-          <Send className="w-6 h-6 shrink-0" />
+    <nav className="sticky top-0 z-50 border-b border-slate-100 bg-white/90 backdrop-blur">
+      <div className="container mx-auto flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <Link
+          to="/"
+          className="flex shrink-0 items-center gap-2 text-lg font-bold text-primary sm:text-xl"
+        >
+          <Send className="h-6 w-6 shrink-0" aria-hidden="true" />
           <span>SendAm</span>
         </Link>
-        <div className="flex gap-3 sm:gap-6 items-center justify-end min-w-0">
-          <a href={ADMIN_URL} className="text-sm font-medium text-gray-600 hover:text-primary transition-colors">
+
+        <div className="hidden items-center gap-7 md:flex">
+          <a href="#features" className="text-sm font-medium text-slate-600 transition-colors hover:text-primary">
+            Features
+          </a>
+          <a href="#how-it-works" className="text-sm font-medium text-slate-600 transition-colors hover:text-primary">
+            How it works
+          </a>
+          <a href="#faq" className="text-sm font-medium text-slate-600 transition-colors hover:text-primary">
+            FAQ
+          </a>
+        </div>
+
+        <div className="flex items-center gap-3 sm:gap-5">
+          <a
+            href={ADMIN_URL}
+            className="text-sm font-medium text-slate-500 transition-colors hover:text-primary"
+          >
             Admin
+          </a>
+          <a
+            href={whatsappUrl('create wallet')}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg bg-whatsapp px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-whatsapp-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-whatsapp-dark"
+          >
+            <MessageCircle size={16} aria-hidden="true" />
+            <span className="hidden sm:inline">Open WhatsApp</span>
+            <span className="sm:hidden">Start</span>
           </a>
         </div>
       </div>
