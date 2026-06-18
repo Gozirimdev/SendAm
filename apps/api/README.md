@@ -115,7 +115,8 @@ apps/api/
     utils/         Response helpers, logger, validators
     app.js         Express app setup (middleware, routes)
     server.js      Database connection and server start
-  test/            node:test suites (parser, crypto, admin auth)
+  test/            node:test suites (parser, crypto, admin auth,
+                   transfer guardrails, recipient resolution, validators)
 ```
 
 ## API Routes
@@ -241,7 +242,7 @@ The backend runs on `http://localhost:3002`.
 
 ## Testing
 
-Unit tests (parser, crypto, admin auth) run on the built-in Node test runner — no extra dependencies:
+Unit tests (parser, crypto, admin auth, transfer guardrails, recipient resolution, validators) run on the built-in Node test runner — no extra dependencies:
 
 ```bash
 npm test                         # from apps/api
