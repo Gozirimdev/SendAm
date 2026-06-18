@@ -129,6 +129,12 @@ All JSON responses use a consistent envelope:
 { "success": false, "message": "…" }
 ```
 
+### Health
+
+```text
+GET /health      Liveness/readiness probe (503 if the database link is down)
+```
+
 ### WhatsApp Webhook
 
 ```text
@@ -147,6 +153,8 @@ GET  /api/admin/transactions   (requires Bearer token)
 ```
 
 `POST /api/admin/login` takes `{ "password": "…" }` and returns `{ data: { token } }`. Send that token as `Authorization: Bearer <token>` on the other admin routes. The login endpoint is rate-limited (10 attempts / 15 min) on top of the global limiter.
+
+The list endpoints (`/users`, `/wallets`, `/transactions`) are paginated via `?page` (default 1) and `?limit` (default 50, max 100). `data` is the array of items; a `pagination` block (`{ page, limit, total, totalPages }`) is returned alongside.
 
 ### Wallet Routes (optional, for testing without WhatsApp)
 
