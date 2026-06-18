@@ -335,6 +335,32 @@ npm test                            # from the repo root
 npm run test --workspace=apps/api   # equivalently
 ```
 
+## Deployment
+
+The three apps deploy differently because of how they run:
+
+### Frontend (`landing`, `admin`)
+
+Static Vite builds — deploy to any static host (Vercel, Netlify, Cloudflare Pages). Build command `npm run build --workspace=apps/landing` (or `apps/admin`), output in `apps/<app>/dist`. Set the `VITE_*` variables (see [Environment Variables](#environment-variables)) at build time.
+
+### Backend (`api`)
+
+The API is a **long-running Express server** (`app.listen` in `src/server.js`), so deploy it to a **persistent Node host** — Render, Railway, Fly.io, or a VM — not Vercel/Lambda serverless functions as written. Two things rely on a persistent process:
+
+- The Mongo connection is opened once at startup. A serverless model would open one per invocation and exhaust the connection pool.
+- The WhatsApp webhook acknowledges Meta immediately and processes the message asynchronously; a serverless function may freeze after the response and never finish the work.
+
+> Running on serverless would require a cached/reused Mongo connection and fully synchronous webhook processing. That refactor is not done — use a persistent host.
+
+Backend deployment checklist:
+
+- Provision managed MongoDB (e.g. MongoDB Atlas) and set `MONGODB_URI`.
+- Set every required `apps/api` variable — the server **fails fast at startup** without `ENCRYPTION_KEY`, `JWT_SECRET`, and `ADMIN_PASSWORD`, and rejects unsigned webhooks in production without `WHATSAPP_APP_SECRET`.
+- Set `NODE_ENV=production` and a `CORS_ORIGINS` allowlist covering the deployed admin/landing URLs.
+- Point the host's health check at `GET /health` (returns 503 if the database link is down).
+- Configure the WhatsApp Business webhook URL to `https://<api-host>/webhook` with a matching `WHATSAPP_VERIFY_TOKEN`.
+- Keep `ENCRYPTION_KEY` backed up securely — losing it makes every stored wallet secret unrecoverable.
+
 ## Web App Pages
 
 Landing app (`apps/landing`):
