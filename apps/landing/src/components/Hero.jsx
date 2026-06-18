@@ -14,7 +14,7 @@ export default function Hero() {
 
           <p className="mx-auto mt-5 max-w-xl text-base text-slate-600 sm:text-lg lg:mx-0">
             SendAm turns WhatsApp into a wallet. Create a Stellar account, check
-            your balance, and send XLM — all from a chat, with no app to install
+            your balance, and send XLM, all from a chat, with no app to install
             and no seed phrases to memorise.
           </p>
 
