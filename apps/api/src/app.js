@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -52,6 +53,17 @@ const limiter = rateLimit({
   store: new MongoRateStore(),
 });
 app.use('/api/', limiter);
+
+// Health check for uptime monitors and platform probes. Not rate-limited and
+// requires no auth; reports 503 if the database link is down.
+app.get('/health', (req, res) => {
+  const connected = mongoose.connection.readyState === 1;
+  res.status(connected ? 200 : 503).json({
+    status: connected ? 'ok' : 'degraded',
+    db: connected ? 'connected' : 'disconnected',
+    uptime: process.uptime(),
+  });
+});
 
 // Routes
 app.use('/webhook', webhookRoutes);
