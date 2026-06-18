@@ -1,4 +1,4 @@
-const { createWalletForUser, getWalletByPhoneNumber, getWalletByUserId } = require('../services/wallet.service');
+const { createWalletForUser, getWalletByPhoneNumber, getWalletByUserId, markWalletFunded } = require('../services/wallet.service');
 const { getBalance, fundAccount, isValidPublicKey } = require('../services/stellar.service');
 const { executeSend } = require('../services/transaction.service');
 const { isValidPhoneNumber, isValidAmount } = require('../utils/validators');
@@ -18,8 +18,11 @@ const createWallet = async (req, res, next) => {
     try {
       const wallet = await createWalletForUser(user._id);
 
-      // Attempt to fund testnet
+      // Attempt to fund testnet, then persist the funded flag so this matches
+      // the WhatsApp flow (which marks the wallet funded on success). Without
+      // this, REST-created wallets stayed funded:false despite being funded.
       await fundAccount(wallet.publicKey);
+      await markWalletFunded(wallet._id);
 
       return sendSuccess(res, {
         publicKey: wallet.publicKey,
