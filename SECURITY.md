@@ -16,10 +16,18 @@ SendAm is currently a **Stellar Testnet MVP**. It is not configured for real-mon
 - Transaction-signing or transfer-authorization vulnerabilities.
 - Production credential or secret leaks.
 
-Instead:
+Instead, report privately through one of these channels:
 
-1. Contact the maintainers privately if a security contact is available.
-2. If no private channel exists, open a **minimal** issue stating only that you found a security concern and asking for a contact — do not post exploit details or proof-of-concept publicly.
+1. **GitHub private vulnerability reporting (preferred):** open a report at
+   <https://github.com/Gozirimdev/SendAm/security/advisories/new>. This keeps the
+   details private to the maintainers until a fix is ready.
+2. If you cannot use that, open a **minimal** public issue stating only that you
+   found a security concern and asking for a private contact — do not post
+   exploit details or proof-of-concept publicly.
+
+> Maintainers: enable "Private vulnerability reporting" in the repository's
+> Settings → Security so the link above is active, and add a direct email here
+> if you have a dedicated security contact.
 
 Please include, when you can: affected component, reproduction steps, impact, and any suggested fix. We aim to acknowledge reports promptly and will coordinate disclosure once a fix is available.
 
