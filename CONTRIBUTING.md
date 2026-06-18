@@ -4,6 +4,8 @@ Thank you for your interest in contributing to SendAm. SendAm is an open-source 
 
 Contributions are welcome across product, engineering, documentation, testing, security, and chain ecosystem integrations.
 
+By participating in this project you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Project Scope
 
 SendAm currently focuses on:
