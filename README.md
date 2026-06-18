@@ -276,6 +276,9 @@ For the landing app (`apps/landing/.env`), configure:
 VITE_ADMIN_URL=http://localhost:3001
 ```
 
+For production, set `VITE_ADMIN_URL` to the admin dashboard subdomain, for
+example `https://admin.your-domain.com`.
+
 ## Getting Started
 
 ### Prerequisites
