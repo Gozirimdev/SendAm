@@ -171,12 +171,16 @@ node --check apps/api/src/app.js
 
 If your change touches a specific backend file, run `node --check` on that file too. New parser, crypto, auth, or transaction logic should come with tests in `apps/api/test/`.
 
-For frontend changes (replace `landing` with `admin` as appropriate):
+For frontend changes, lint and build the app(s) you touched:
 
 ```bash
+npm run lint  --workspace=apps/landing
 npm run build --workspace=apps/landing
+npm run lint  --workspace=apps/admin
 npm run build --workspace=apps/admin
 ```
+
+These same checks run automatically in CI (`.github/workflows/ci.yml`) on every pull request.
 
 ## Security Policy
 
