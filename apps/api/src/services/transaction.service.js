@@ -84,5 +84,6 @@ const executeSend = async ({ user, wallet, destination, amount, asset = 'XLM' })
 };
 
 module.exports = {
+  enforceSendLimits,
   executeSend,
 };

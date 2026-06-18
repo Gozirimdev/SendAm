@@ -268,4 +268,6 @@ const isPendingSendExpired = (pendingSend) => {
 
 module.exports = {
   processMessage,
+  resolveRecipient,
+  isPendingSendExpired,
 };
