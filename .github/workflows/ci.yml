@@ -17,7 +17,8 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      # Unit tests (parser, crypto, admin auth) — no database required.
+      # Unit tests (parser, crypto, admin auth, transfer guardrails, recipient
+      # resolution, validators) — no database required.
       - run: npm test
 
   frontend:

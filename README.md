@@ -328,7 +328,7 @@ This starts the API, landing, and admin apps together.
 
 ### Run The Tests
 
-The backend ships with a unit test suite on the built-in Node test runner (no extra dependencies), covering the command parser, wallet-secret encryption, and admin auth:
+The backend ships with a unit test suite on the built-in Node test runner (no extra dependencies), covering the command parser, wallet-secret encryption, admin auth, transfer guardrails, recipient resolution, and request validators:
 
 ```bash
 npm test                            # from the repo root
