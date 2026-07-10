@@ -1,100 +1,72 @@
-# SendAm Backend API
+# SendAm API
 
-The SendAm backend is the payment engine behind the WhatsApp-first chain wallet MVP. It receives WhatsApp webhook events, parses user commands, creates chain Testnet wallets, checks balances, sends TOKEN, stores transaction records, and exposes admin data for the web dashboard.
+Express backend for the new SendAm architecture: WhatsApp conversational payments, managed wallets, payment orchestration, compliance, voice transcription, escrow, pricing, queues, and admin monitoring.
 
-> Current status: Testnet MVP. The core security hardening (admin auth, webhook signature verification, authenticated encryption, input validation, transfer guardrails) is in place. Real-money production still needs mainnet migration, managed key management, audit logging, and compliance review — see [Security and Production Requirements](#security-and-production-requirements).
+## Architecture
 
-## What This API Does
-
-- Receives WhatsApp Business webhook messages (signature-verified).
-- Converts simple text commands into wallet actions.
-- Creates chain keypairs for new users.
-- Encrypts and stores chain references with authenticated authenticated encryption.
-- Funds new Testnet wallets using chain faucet, with retry and a `fund` recovery command.
-- Checks native TOKEN balances through chain rpc.
-- Saves recipient aliases for repeat payments.
-- Requires WhatsApp confirmation before submitting a transfer, and checks balance up front.
-- Enforces per-user transfer guardrails (per-transaction cap + rolling 24h amount/count limits).
-- Builds, signs, and submits TOKEN payment transactions.
-- Returns chain Expert receipt links after successful transfers.
-- Stores users, wallets, and transactions in MongoDB.
-- Provides admin endpoints (token-protected) for dashboard statistics and tables.
-- Optionally exposes REST wallet endpoints for testing without WhatsApp.
-
-## Why It Matters
-
-SendAm is built around a simple idea: people should be able to access blockchain payments without first learning complicated wallet software. This backend makes chain usable through WhatsApp, a channel many mobile-first users already understand.
-
-chain is used because it provides:
-
-- Fast payment settlement.
-- Very low transaction costs.
-- Simple account and payment primitives.
-- A reliable rpc API for balances and transaction submission.
-- A clear path toward future asset, anchor, and fiat payment integrations.
-
-## Core User Commands
-
-The WhatsApp command parser currently supports:
+The API is moving away from the original chain-only wallet bot. The current backend now routes work through these modules:
 
 ```text
-hi / hello              Greeting
-help                    List available commands
-create wallet           Create (and fund) a chain Testnet wallet
-fund / fund wallet      Retry funding if a wallet was created but not funded
-balance                 Check your TOKEN balance
-save ada GABC...        Save a contact alias
-contacts                List saved contacts
-send 5 token ada          Prepare a transfer to a saved alias
-send 5 token GABC...      Prepare a transfer to a public key
-yes / confirm           Confirm a pending transfer
-no / cancel             Cancel a pending transfer
+src/
+  whatsapp/      Conversational assistant
+  wallet/        WalletService abstraction over Provider/Vendor
+  payment/       Payment Orchestrator
+  escrow/        Lisk escrow lifecycle
+  compliance/    KYC tiers, PIN, risk, limits
+  voice/         Voice note download + transcription
+  pricing/       FX and fee quotes
+  blockchain/    Rail selection
+  queues/        BullMQ queue helpers
+  jobs/          Background processors
+  common/        Shared audit helpers
 ```
 
-## Main Flow
+## Payment Rails
 
-### Wallet Creation
+- Lisk is the primary settlement layer.
+- chain is reserved for cross-border corridors.
+- Yellow Card and Paychant are intended for NGN/USDC cash-in and cash-out.
+- Users never choose or see the rail; the Payment Orchestrator records it internally.
 
-1. User sends `create wallet` on WhatsApp.
-2. Backend creates or finds the user by phone number.
-3. Backend generates a chain keypair.
-4. Reference is encrypted (authenticated encryption) before storage.
-5. Wallet public key is stored in MongoDB.
-6. Testnet wallet is funded through faucet (retried on failure).
-7. Wallet is marked `funded` and the user receives their public key by WhatsApp.
+## Wallets
 
-If faucet funding fails, the wallet is left unfunded and the user is told to reply `fund` to retry. Re-sending `create wallet` also re-attempts funding rather than reporting "you already have a wallet".
+`src/wallet/account.service.js` is the only backend surface that should talk to a provisioning provider. Provider Engine is the preferred provider. Vendor is scaffolded as a swappable adapter.
 
-### Balance Check
+## Queues
 
-1. User sends `balance`.
-2. Backend finds the wallet connected to the user's phone number.
-3. Backend loads the chain account from rpc.
-4. User receives their TOKEN balance.
+WhatsApp webhooks return `200` immediately, then enqueue work through BullMQ when Redis is configured. In local development without Redis, jobs run through an inline fallback.
 
-### TOKEN Transfer
+## Environment
 
-1. User sends `send <amount> token <destination>` or `send <amount> token <saved-name>`.
-2. Backend parses the amount and resolves the destination public key.
-3. Backend checks the sender's balance and rejects the transfer up front if it is insufficient.
-4. Backend sends a confirmation prompt (expires after 10 minutes).
-5. User replies `YES` to send or `NO` to cancel.
-6. Backend enforces per-user transfer guardrails.
-7. Backend decrypts the stored chain reference.
-8. Backend builds, signs, and submits a chain payment transaction.
-9. Transaction status, hash, and chain Expert receipt link are stored in MongoDB (both success and failure).
-10. User receives a WhatsApp success or failure message.
+Use `.env.example`. The main provider keys are:
+
+```text
+PROVIDER_ENGINE_URL=
+PROVIDER_ACCESS_TOKEN=
+PROVIDER_BACKEND_WALLET_ADDRESS=
+PROVIDER_USDC_CONTRACT_ADDRESS=
+LISK_RPC_URL=
+LISK_ESCROW_CONTRACT_ADDRESS=
+REDIS_URL=
+DEEPGRAM_API_KEY=
+SMILE_ID_PARTNER_ID=
+SMILE_ID_API_KEY=
+YELLOW_CARD_API_KEY=
+PAYCHANT_API_KEY=
+EXCHANGERATE_API_KEY=
+```
 
 ## Tech Stack
 
 - Node.js
 - Express
-- MongoDB with Mongoose
-- `@chain/chain-sdk`
+- PostgreSQL (Neon) with Prisma
+- `@chain/chain-sdk`, Provider Engine, Vendor
 - WhatsApp Business Cloud API
+- BullMQ / Redis
 - Axios
 - Helmet, CORS, Morgan
-- Mongo-backed rate limiting (`express-rate-limit` + a custom shared store)
+- PostgreSQL-backed rate limiting (`express-rate-limit` + a custom shared store)
 - `node:test` for the test suite
 
 ## Folder Structure
@@ -102,22 +74,31 @@ If faucet funding fails, the wallet is left unfunded and the user is told to rep
 ```text
 apps/api/
   src/
-    config/        Environment, database, and chain configuration
+    config/        Environment and database configuration
     controllers/   Webhook, wallet, and admin request handlers
+    whatsapp/      Conversational assistant
+    wallet/        WalletService abstraction over Provider/Vendor
+    payment/       Payment Orchestrator
+    escrow/        Lisk escrow lifecycle
+    compliance/    KYC tiers, PIN, risk, limits
+    voice/         Voice note download + transcription
+    pricing/       FX and fee quotes
+    blockchain/    Rail selection
+    queues/        BullMQ queue helpers
+    jobs/          Background processors
     middlewares/   Error handling, not-found, admin auth, webhook verify,
-                   WhatsApp signature verify, Mongo rate-limit store
-    models/        Mongoose models: User, Wallet, Transaction,
-                   ProcessedMessage (idempotency), RateLimitHit
+                   WhatsApp signature verify, Postgres rate-limit store
     routes/        Express route definitions
-    services/      WhatsApp, chain, wallet, transaction, crypto,
-                   adminAuth, rateLimit services
-      agent/       WhatsApp agent: intent parser, handler, replies
+    services/      WhatsApp, crypto, adminAuth, rateLimit services
+    common/        Prisma client, audit helpers, shared record utils
     utils/         Response helpers, logger, validators
     app.js         Express app setup (middleware, routes)
     server.js      Database connection and server start
-  test/            node:test suites (parser, crypto, admin auth,
-                   transfer guardrails, recipient resolution, validators)
+  prisma/          Prisma schema and migrations
+  test/            node:test suites (crypto, admin auth, validators)
 ```
+
+## Run
 
 ## API Routes
 
@@ -151,6 +132,10 @@ GET  /api/admin/stats          (requires Bearer token)
 GET  /api/admin/users          (requires Bearer token)
 GET  /api/admin/wallets        (requires Bearer token)
 GET  /api/admin/transactions   (requires Bearer token)
+GET  /api/admin/escrows        (requires Bearer token)
+GET  /api/admin/kyc            (requires Bearer token)
+GET  /api/admin/audit-logs     (requires Bearer token)
+GET  /api/admin/system-health  (requires Bearer token)
 ```
 
 `POST /api/admin/login` takes `{ "password": "…" }` and returns `{ data: { token } }`. Send that token as `Authorization: Bearer <token>` on the other admin routes. The login endpoint is rate-limited (10 attempts / 15 min) on top of the global limiter.
@@ -228,21 +213,26 @@ From the repository root:
 
 ```bash
 npm install
-npm run dev:api
+npm run prisma:generate --workspace=apps/api
+npm run prisma:deploy --workspace=apps/api
+npm run dev --workspace=apps/api
 ```
 
-Or from `apps/api`:
+For local schema changes during development:
 
 ```bash
-npm install
-npm run dev
+npm run prisma:migrate --workspace=apps/api
 ```
+
+## Important Gaps
+
+This refactor adds production module boundaries, Prisma/PostgreSQL persistence, and provider adapters, but real-money launch still needs final provider onboarding, contract deployment, worker deployment, automated tests, monitoring, admin RBAC, and compliance approval — including authentication on the compliance PIN and KYC-start endpoints (see below).
 
 The backend runs on `http://localhost:3002`.
 
 ## Testing
 
-Unit tests (parser, crypto, admin auth, transfer guardrails, recipient resolution, validators) run on the built-in Node test runner — no extra dependencies:
+Unit tests (crypto, admin auth, validators) run on the built-in Node test runner — no extra dependencies:
 
 ```bash
 npm test                         # from apps/api
@@ -273,12 +263,12 @@ Check balance:
 curl http://localhost:3002/api/wallet/+2348000000000/balance
 ```
 
-Send TOKEN:
+Send a payment:
 
 ```bash
 curl -X POST http://localhost:3002/api/wallet/send \
   -H "Content-Type: application/json" \
-  -d '{"phoneNumber":"+2348000000000","amount":"5","destination":"GDESTINATIONPUBLICKEY"}'
+  -d '{"phoneNumber":"+2348000000000","amount":"5","destination":"0xDESTINATIONADDRESS"}'
 ```
 
 ## Testing WhatsApp Webhooks Locally
@@ -296,37 +286,28 @@ Already in place:
 
 - Real admin authentication with HMAC-signed, expiring session tokens; the API refuses to start without `ADMIN_PASSWORD` and `JWT_SECRET`.
 - Admin API routes protected by the `requireAdmin` middleware; login endpoint rate-limited.
-- Authenticated authenticated encryption encryption of wallet secrets (tamper-detecting); no fallback key.
 - WhatsApp webhook POSTs verified against `X-Hub-Signature-256` (fail-closed in production).
 - Inbound message idempotency to prevent duplicate transfers from webhook retries.
-- Strong validation of chain public keys, amounts, and phone numbers.
-- Per-user transfer guardrails plus a pre-confirmation balance check.
-- CORS allowlist enforced in production; Mongo-backed shared rate limiting.
+- KYC tiers with daily/single-transaction limits and risk scoring, enforced on every payment via the Payment Orchestrator.
+- CORS allowlist enforced in production; PostgreSQL-backed shared rate limiting.
+- The unauthenticated REST wallet API is disabled in production by default (`ENABLE_WALLET_REST_API`).
 
 ## Security and Production Requirements
 
 Before a real-money launch, this backend still needs:
 
-- Migration from chain Testnet to mainnet with a vetted deployment.
-- Managed secret/key management (KMS/HSM) with key rotation, instead of one static env key.
-- Per-user authentication on the REST wallet API (or keep it disabled).
-- Audit logs for sensitive actions, plus monitoring and alerting.
+- Authentication on `POST /api/compliance/pin` and `POST /api/compliance/kyc/start` — both currently accept any phone number with no identity check, so anyone can set another user's transaction PIN or flip their KYC status.
+- Managed secret/key management (KMS/HSM) for provider credentials, with key rotation.
+- Audit-log coverage for all sensitive admin and compliance actions, plus monitoring and alerting.
 - Replacement of the single shared admin password with real admin accounts and roles.
-- Broader automated test coverage (webhook and transaction integration flows).
+- Broader automated test coverage (payment orchestrator, wallet, webhook, voice, compliance, and escrow flows).
 - Legal, compliance, KYC, AML, and custody review where required.
 
 ## Current Limitations
 
-- chain Testnet only.
-- Native TOKEN transfers only.
-- Simple command parser.
+- Simple WhatsApp command/intent parsing (regex-based).
 - Single shared admin password (no per-admin accounts or roles yet).
-- REST wallet API is unauthenticated (and disabled in production by default).
-- No customer web login/signup — WhatsApp phone number is the MVP identity.
-- No production compliance workflow yet.
-
-## Reviewer Summary
-
-This backend proves the most important SendAm concept: a user can interact with chain payments through WhatsApp. It demonstrates wallet creation with funding recovery, balance lookup, saved recipients, confirmation- and limit-guarded TOKEN transfers, transaction receipts, transaction storage, and token-protected admin observability.
-
-The next major step toward real users is mainnet migration, managed key management, audit logging, broader test coverage, and compliance review.
+- REST wallet API is unauthenticated by design (and disabled in production by default).
+- Compliance PIN and KYC-start endpoints are unauthenticated (see above).
+- No customer web login/signup — WhatsApp phone number is the identity.
+- chain corridor and fiat ramp execution are stubbed pending provider/custody onboarding.
