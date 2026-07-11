@@ -118,20 +118,4 @@ module.exports = {
       ? process.env.ENABLE_WALLET_REST_API === 'true'
       : env !== 'production',
   },
-  // Private relayer that would sponsor Lisk gas so sending feels free. The
-  // relayer itself (a funded gas wallet + signing logic) is not part of this
-  // repo. Both vars are optional: unset means "no paymaster configured", and
-  // the client degrades gracefully rather than erroring. Not yet wired into
-  // the live send flow — see paymaster.service.js.
-  paymaster: {
-    serviceUrl: process.env.PAYMASTER_SERVICE_URL,
-    apiKey: process.env.PAYMASTER_API_KEY,
-  },
-  // NGN display rate. Provider is swappable on purpose — whether SendAm
-  // should show the official CBN rate or a parallel-market rate is a
-  // product decision, not resolved by this config.
-  fx: {
-    provider: process.env.FX_PROVIDER || 'exchangerate_api',
-    apiKey: process.env.FX_API_KEY,
-  },
 };
