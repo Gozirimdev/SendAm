@@ -34,6 +34,15 @@ an EVM `0x...` address), so a user never has to declare which chain they mean
 — every user gets both a chain and a Lisk wallet by default, and `send`
 routes automatically.
 
+```mermaid
+flowchart TD
+    CMD[WhatsApp command / REST request] --> RA["resolveAdapter(chain)"]
+    RA -->|"destination is chain G... AddressCodec"| SA[chain.reader.js]
+    RA -->|"destination is EVM 0x... address"| LA[lisk.reader.js]
+    SA --> HZ[(chain rpc)]
+    LA --> LN[(Lisk Network)]
+```
+
 ## What's open vs. what's a private service
 
 Everything that makes SendAm's chain and Lisk integrations work is in this
