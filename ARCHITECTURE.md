@@ -1,85 +1,56 @@
 # Architecture
 
-This document describes how SendAm is structured internally: the chain-adapter
-pattern that lets it support more than one blockchain, and the boundary
-between what ships in this open-source repository and what runs as a
-privately-operated service.
+This document describes how SendAm's backend is structured internally, and
+the boundary between what ships in this open-source repository and what
+runs as a privately-operated service.
 
-## Chain adapters
+## Wallets: Wallet-as-a-Service, not direct custody
 
-SendAm's product surface (WhatsApp commands, wallet records, transaction
-history, admin dashboard) is chain-agnostic. Blockchain-specific logic is
-isolated behind a small adapter interface in `apps/api/src/services/chains/`:
+SendAm does not generate or hold private keys itself. `apps/api/src/wallet/`
+is a thin abstraction (`WalletService`) over a managed Wallet-as-a-Service
+provider — Thirdweb Engine by default, with Openfort scaffolded as a
+swappable alternative. Product code (payment orchestration, the WhatsApp
+assistant, admin reporting) only ever calls `WalletService`; it never talks
+to a provider SDK directly.
 
-```js
-{
-  chain,                                  // 'stellar' | 'lisk'
-  createWallet(),                         // -> { publicKey, secretKey }
-  getBalance(publicKey),                  // -> native-asset balance
-  submitPayment({ secretKey, destination, amount, asset }),
-  resolveAsset(assetCode),
-  validateAddress(address),
-  fundTestnetAccount(publicKey),          // testnet-only convenience
-}
-```
+- Lisk is the primary settlement layer.
+- Stellar is reserved for cross-border payment corridors, selected by
+  `apps/api/src/blockchain/railSelector.js`.
 
-Each supported chain implements this interface once (`stellar.adapter.js`,
-`lisk.adapter.js`). The rest of the codebase — command handling, guardrails,
-the confirm-before-send flow, admin reporting — talks to `resolveAdapter(chain)`
-and never imports a chain SDK directly. Adding a new chain means writing one
-adapter, not touching the product logic.
-
-Destination chain is inferred from address shape (a Stellar `G...` StrKey vs.
-an EVM `0x...` address), so a user never has to declare which chain they mean
-— every user gets both a Stellar and a Lisk wallet by default, and `send`
-routes automatically.
-
-```mermaid
-flowchart TD
-    CMD[WhatsApp command / REST request] --> RA["resolveAdapter(chain)"]
-    RA -->|"destination is Stellar G... StrKey"| SA[stellar.adapter.js]
-    RA -->|"destination is EVM 0x... address"| LA[lisk.adapter.js]
-    SA --> HZ[(Stellar Horizon)]
-    LA --> LN[(Lisk Network)]
-```
+An earlier direction explored direct key custody via a per-chain adapter
+pattern (a `chains/` module with a `stellar.adapter.js` / `lisk.adapter.js`
+interface, each user holding both a Stellar and a Lisk wallet). That
+approach is not part of this codebase — the Wallet-as-a-Service model was
+chosen instead so this repo never holds a private key that can move real
+funds. It's preserved in git history on the `feat/multi-chain-foundation`
+branch (tip commit `d770f2c`) if direct custody is ever revisited.
 
 ## What's open vs. what's a private service
 
-Everything that makes SendAm's Stellar and Lisk integrations work is in this
-repository: wallet creation, balance checks, payment submission, address
-validation, the WhatsApp command flow, and the admin dashboard. That's
-deliberate — the parts of the system that plug directly into each chain are
-exactly what should be open and reviewable.
-
-A few capabilities depend on infrastructure that has to run privately —
-holding real funds, or configuration that shouldn't ship in a public repo —
-and this repo only contains a thin, well-defined client for them. If the
-private service isn't configured, the feature degrades gracefully (clearly
-logged, no crash) rather than failing silently.
+Everything that makes SendAm's payment flow work is in this repository:
+wallet creation, balance checks, payment orchestration, rail selection, the
+WhatsApp command flow, compliance/KYC gating, escrow, and the admin
+dashboard. A few capabilities depend on infrastructure that has to run
+privately — holding real funds, or credentials that shouldn't ship in a
+public repo — and this repo only contains a thin, well-defined client for
+them, degrading gracefully (clearly logged, no crash) when unconfigured.
 
 | Capability | In this repo | Runs privately |
 |---|---|---|
-| Stellar wallet / balance / send | Full implementation | — |
-| Lisk wallet / balance / send | Full implementation | — |
-| Cross-chain settlement (bridge) | Adapter interface + Stellar-leg client | Treasury custody, routing execution |
+| Payment orchestration, rail selection | Full implementation | — |
+| Managed wallets (Thirdweb/Openfort) | Full client | Custody, key management |
 | Gas sponsorship (paymaster) | Thin client, calling contract only | Funded gas wallet, relayer signing |
-| AI-assisted command parsing | Generic call + structured-output parsing | The tuned system prompt (versioned, stored server-side) |
-
-The AI intent decoder is worth calling out specifically: it only ever
-*proposes* a parsed command. Every proposal — whether it came from the
-regex-based parser or the AI fallback — flows through the same deterministic
-guardrails (per-transaction and rolling 24-hour limits, balance checks, and
-an explicit user confirmation) before any funds move. The model never
-executes a transaction directly.
+| KYC | Tier/limit/risk-scoring logic | Provider identity verification (Smile ID / Dojah) |
 
 ## Why this shape
 
-- **Reviewability.** Anyone can read exactly how SendAm talks to Stellar and
-  Lisk, because that code is the whole point of being open source here.
-- **Safety.** Capabilities that hold real value (a bridge treasury, a funded
-  gas wallet) aren't distributed in a public repository's environment
+- **Reviewability.** The payment logic, rail selection, and compliance
+  gating that decide what happens to a user's request are all in this
+  open-source repo.
+- **Safety.** Capabilities that hold real value (custody, a funded gas
+  wallet) aren't distributed in a public repository's environment
   configuration — they're operated as services with their own access
   control.
-- **Extensibility.** The adapter interface is the seam for the next chain,
-  the next asset, or a SEP-10/Soroban-based Stellar feature — it slots in
-  without touching unrelated code.
+- **Extensibility.** `railSelector.js` and `WalletService` are the seams for
+  the next rail or the next provider — they slot in without touching
+  unrelated code.

@@ -1,8 +1,7 @@
-const User = require('../models/User');
-const Wallet = require('../models/Wallet');
-const Transaction = require('../models/Transaction');
 const { sendSuccess, sendError, sendPaginated } = require('../utils/response');
 const { verifyPassword, createToken } = require('../services/adminAuth.service');
+const prisma = require('../common/prisma');
+const { withIdAliases } = require('../common/records');
 
 // Parse ?page and ?limit into safe bounds so list endpoints can never be asked
 // to load the entire collection at once. Defaults to 50/page, capped at 100.
@@ -27,18 +26,41 @@ const login = async (req, res, next) => {
 
 const getStats = async (req, res, next) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const totalWallets = await Wallet.countDocuments();
-    const totalTransactions = await Transaction.countDocuments();
-    const successfulTransactions = await Transaction.countDocuments({ status: 'success' });
-    const failedTransactions = await Transaction.countDocuments({ status: 'failed' });
+    const [
+      totalUsers,
+      totalWallets,
+      totalTransactions,
+      successfulTransactions,
+      failedTransactions,
+      pendingTransactions,
+      openEscrows,
+      pendingKyc,
+      voiceCommands,
+      activeCashoutLocations,
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.wallet.count(),
+      prisma.transaction.count(),
+      prisma.transaction.count({ where: { status: 'success' } }),
+      prisma.transaction.count({ where: { status: 'failed' } }),
+      prisma.transaction.count({ where: { status: { in: ['pending', 'processing'] } } }),
+      prisma.escrow.count({ where: { status: { in: ['funding', 'locked', 'disputed'] } } }),
+      prisma.kycProfile.count({ where: { status: { in: ['pending', 'review'] } } }),
+      prisma.voiceCommand.count(),
+      prisma.cashoutLocation.count({ where: { status: 'active' } }),
+    ]);
 
     sendSuccess(res, {
       totalUsers,
       totalWallets,
       totalTransactions,
       successfulTransactions,
-      failedTransactions
+      failedTransactions,
+      pendingTransactions,
+      openEscrows,
+      pendingKyc,
+      voiceCommands,
+      activeCashoutLocations,
     });
   } catch (error) {
     next(error);
@@ -49,27 +71,19 @@ const getUsers = async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
     const [users, total] = await Promise.all([
-      User.find().sort({ createdAt: -1 }).skip(skip).limit(limit),
-      User.countDocuments(),
+      prisma.user.findMany({
+        include: { wallet: { select: { publicKey: true, address: true, network: true, createdAt: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.user.count(),
     ]);
-
-    // Wallets are looked up separately and attached to the response rather
-    // than populated — a user can now have one wallet per chain, so there's
-    // no single ref on User to populate (see models/User.js).
-    const userIds = users.map((u) => u._id);
-    const wallets = await Wallet.find({ userId: { $in: userIds } }).select('userId chain publicKey network createdAt');
-    const walletsByUser = wallets.reduce((acc, w) => {
-      const key = String(w.userId);
-      (acc[key] = acc[key] || []).push(w);
-      return acc;
-    }, {});
-
-    const usersWithWallets = users.map((u) => ({
-      ...u.toObject(),
-      wallets: walletsByUser[String(u._id)] || [],
-    }));
-
-    sendPaginated(res, usersWithWallets, { page, limit, total });
+    sendPaginated(res, withIdAliases(users.map((user) => ({
+      ...user,
+      walletId: user.wallet,
+      pinHash: undefined,
+    }))), { page, limit, total });
   } catch (error) {
     next(error);
   }
@@ -79,11 +93,19 @@ const getWallets = async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
     const [wallets, total] = await Promise.all([
-      // Exclude encryptedSecretKey from output
-      Wallet.find().select('-encryptedSecretKey').populate('userId', 'phoneNumber whatsappName').sort({ createdAt: -1 }).skip(skip).limit(limit),
-      Wallet.countDocuments(),
+      prisma.wallet.findMany({
+        include: { user: { select: { phoneNumber: true, whatsappName: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.wallet.count(),
     ]);
-    sendPaginated(res, wallets, { page, limit, total });
+    sendPaginated(res, withIdAliases(wallets.map((wallet) => ({
+      ...wallet,
+      encryptedSecretKey: undefined,
+      userId: wallet.user,
+    }))), { page, limit, total });
   } catch (error) {
     next(error);
   }
@@ -93,10 +115,76 @@ const getTransactions = async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
     const [transactions, total] = await Promise.all([
-      Transaction.find().populate('userId', 'phoneNumber').sort({ createdAt: -1 }).skip(skip).limit(limit),
-      Transaction.countDocuments(),
+      prisma.transaction.findMany({
+        include: { user: { select: { phoneNumber: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.transaction.count(),
     ]);
-    sendPaginated(res, transactions, { page, limit, total });
+    sendPaginated(res, withIdAliases(transactions.map((transaction) => ({
+      ...transaction,
+      userId: transaction.user,
+    }))), { page, limit, total });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getEscrows = async (_req, res, next) => {
+  try {
+    const escrows = await prisma.escrow.findMany({
+      include: { creator: { select: { phoneNumber: true, whatsappName: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    sendSuccess(res, withIdAliases(escrows.map((escrow) => ({
+      ...escrow,
+      creatorId: escrow.creator,
+    }))));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getKycProfiles = async (_req, res, next) => {
+  try {
+    const profiles = await prisma.kycProfile.findMany({
+      include: { user: { select: { phoneNumber: true, whatsappName: true } } },
+      orderBy: { updatedAt: 'desc' },
+    });
+    sendSuccess(res, withIdAliases(profiles.map((profile) => ({
+      ...profile,
+      userId: profile.user,
+    }))));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getAuditLogs = async (_req, res, next) => {
+  try {
+    const logs = await prisma.auditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    sendSuccess(res, withIdAliases(logs));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getSystemHealth = async (_req, res, next) => {
+  try {
+    sendSuccess(res, {
+      api: 'ok',
+      database: 'ok',
+      queues: process.env.REDIS_URL || process.env.UPSTASH_REDIS_URL ? 'redis-configured' : 'inline-dev-mode',
+      primarySettlement: 'lisk',
+      corridorRail: 'stellar',
+      walletProvider: process.env.WALLET_PROVIDER || 'thirdweb',
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
     next(error);
   }
@@ -107,5 +195,9 @@ module.exports = {
   getStats,
   getUsers,
   getWallets,
-  getTransactions
+  getTransactions,
+  getEscrows,
+  getKycProfiles,
+  getAuditLogs,
+  getSystemHealth,
 };

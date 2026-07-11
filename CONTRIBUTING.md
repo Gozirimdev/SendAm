@@ -43,8 +43,8 @@ Larger areas include:
 - Contact and recipient management.
 - QR-code wallet sharing.
 - Compliance-aware production workflows.
-- Cross-chain expansion (Lisk) via the chain-adapter pattern — see
-  [`ARCHITECTURE.md`](ARCHITECTURE.md) and the notes below.
+- Gas sponsorship (paymaster) and NGN price display are built but not yet
+  wired into the live flow — see [`ROADMAP.md`](ROADMAP.md).
 
 ## Local Setup
 
@@ -213,29 +213,21 @@ When contributing Stellar functionality:
 - Be careful with custody-related changes.
 - Document any assumptions around assets, issuers, trustlines, or anchors.
 
-## Cross-Chain (Lisk) Contribution Notes
+## Lisk Contribution Notes
 
-SendAm is extending to Lisk, an EVM-compatible Layer 2 network, alongside
-Stellar. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the chain-adapter
-pattern this work follows before contributing here.
+Lisk is reached through the managed Wallet-as-a-Service provider
+(`apps/api/src/wallet/`), not direct chain integration — see
+[`ARCHITECTURE.md`](ARCHITECTURE.md). When contributing Lisk-related
+functionality:
 
-When contributing Lisk functionality:
-
-- Use Lisk Sepolia testnet for development, not mainnet.
+- Use a testnet provider configuration, not mainnet.
 - Do not use real funds in development.
-- Implement new chain logic behind the shared adapter interface
-  (`createWallet`, `getBalance`, `submitPayment`, `resolveAsset`,
-  `validateAddress`, `fundTestnetAccount`) — product-level code (command
-  handling, guardrails, admin reporting) should never import a chain SDK
-  directly.
-- Validate addresses before submitting transactions.
-- Be careful with custody-related changes, exactly as with the Stellar side.
-- Lisk Sepolia has no Friendbot-equivalent auto-fund API — testnet funding
-  currently requires a human-facing faucet (e.g. the Superchain Faucet).
-  Don't assume a scriptable, server-side auto-fund path exists.
-- Document any assumptions around gas sponsorship, bridging, or asset
-  support — these depend on privately-operated services described in
-  `ARCHITECTURE.md`, not code that ships in this repository.
+- Product-level code (payment orchestration, the WhatsApp assistant, admin
+  reporting) should never call a provider SDK directly — go through
+  `WalletService`.
+- Document any assumptions around gas sponsorship or asset support — these
+  depend on privately-operated services described in `ARCHITECTURE.md`, not
+  code that ships in this repository.
 
 ## Documentation Contributions
 
