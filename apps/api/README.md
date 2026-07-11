@@ -1,6 +1,6 @@
 # SendAm API
 
-Express backend for the new SendAm architecture: WhatsApp conversational payments, managed wallets, payment orchestration, compliance, voice transcription, escrow, pricing, queues, and admin monitoring.
+Express backend for the new SendAm architecture: WhatsApp conversational payments, wallet-mapping wallets, payment orchestration, compliance, voice transcription, escrow, pricing, queues, and admin monitoring.
 
 ## Architecture
 
@@ -9,7 +9,7 @@ The API is moving away from the original chain-only wallet bot. The current back
 ```text
 src/
   whatsapp/      Conversational assistant
-  wallet/        WalletService abstraction over Provider/Vendor
+  wallet/        Chain adapters (chain, Lisk) + WalletService abstraction
   payment/       Payment Orchestrator
   escrow/        Lisk escrow lifecycle
   compliance/    KYC tiers, PIN, risk, limits
@@ -26,11 +26,11 @@ src/
 - Lisk is the primary settlement layer.
 - chain is reserved for cross-border corridors.
 - Yellow Card and Paychant are intended for NGN/USDC cash-in and cash-out.
-- Users never choose or see the rail; the Payment Orchestrator records it internally.
+- The destination address decides which chain a plain send uses (chain `G...` AddressCodec vs. Lisk `0x...`); users never choose or see the rail explicitly — the Payment Orchestrator records it internally.
 
 ## Wallets
 
-`src/wallet/account.service.js` is the only backend surface that should talk to a provisioning provider. Provider Engine is the preferred provider. Vendor is scaffolded as a swappable adapter.
+`src/wallet/account.service.js` is the only backend surface that should talk to a chain adapter (`chain.reader.js`, `lisk.reader.js`, resolved via `chainIndex.js`). Wallet mapping: each adapter generates a keypair, and the private key is encrypted (authenticated encryption, `services/secretStore.js`) before being stored — one `Wallet` row per user per chain.
 
 ## Queues
 
@@ -41,10 +41,6 @@ WhatsApp webhooks return `200` immediately, then enqueue work through BullMQ whe
 Use `.env.example`. The main provider keys are:
 
 ```text
-PROVIDER_ENGINE_URL=
-PROVIDER_ACCESS_TOKEN=
-PROVIDER_BACKEND_WALLET_ADDRESS=
-PROVIDER_USDC_CONTRACT_ADDRESS=
 LISK_RPC_URL=
 LISK_ESCROW_CONTRACT_ADDRESS=
 REDIS_URL=
@@ -61,7 +57,7 @@ EXCHANGERATE_API_KEY=
 - Node.js
 - Express
 - PostgreSQL (Neon) with Prisma
-- `@chain/chain-sdk`, Provider Engine, Vendor
+- `@chain/chain-sdk`, `ethers` (Lisk)
 - WhatsApp Business Cloud API
 - BullMQ / Redis
 - Axios
@@ -77,7 +73,7 @@ apps/api/
     config/        Environment and database configuration
     controllers/   Webhook, wallet, and admin request handlers
     whatsapp/      Conversational assistant
-    wallet/        WalletService abstraction over Provider/Vendor
+    wallet/        Chain adapters (chain, Lisk) + WalletService abstraction
     payment/       Payment Orchestrator
     escrow/        Lisk escrow lifecycle
     compliance/    KYC tiers, PIN, risk, limits
