@@ -52,13 +52,21 @@ module.exports = {
     r2AccessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID,
     r2SecretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
   },
-  // Defaults target Lisk Sepolia testnet (chain ID 4202). The official RPC
-  // is rate-limited; https://lisk-sepolia.drpc.org is a documented
-  // alternative if it gets hit hard during development.
+  walletProvider: process.env.SETTLEMENT_CHAIN || 'provider',
+  provider: {
+    engineUrl: process.env.PROVIDER_ENGINE_URL,
+    accessToken: process.env.PROVIDER_ACCESS_TOKEN,
+    backendWalletAddress: process.env.PROVIDER_BACKEND_WALLET_ADDRESS,
+    defaultChain: process.env.PROVIDER_DEFAULT_CHAIN || 'lisk',
+    usdcContractAddress: process.env.PROVIDER_USDC_CONTRACT_ADDRESS,
+  },
+  vendor: {
+    apiUrl: process.env.VENDOR_API_URL || 'https://api.vendor.io',
+    secretKey: process.env.VENDOR_SECRET_KEY,
+  },
   lisk: {
-    chainId: Number(process.env.LISK_CHAIN_ID || 4202),
-    rpcUrl: process.env.LISK_RPC_URL || 'https://rpc.sepolia-api.lisk.com',
-    explorerUrl: process.env.LISK_EXPLORER_URL || 'https://sepolia-blockscout.lisk.com',
+    chainId: process.env.LISK_CHAIN_ID || 'lisk',
+    rpcUrl: process.env.LISK_RPC_URL,
     escrowContractAddress: process.env.LISK_ESCROW_CONTRACT_ADDRESS,
   },
   chain: {

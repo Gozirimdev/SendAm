@@ -21,26 +21,12 @@ called out explicitly wherever it applies, rather than left implied.
 
 ### Core platform — Built, deployment in progress
 
-WhatsApp-driven payment orchestration on Postgres/Prisma: wallet-mapping
-wallets (a chain and a Lisk wallet per user, keys generated and encrypted
-locally — see [`ARCHITECTURE.md`](ARCHITECTURE.md)), Lisk as the primary
+WhatsApp-driven payment orchestration on Postgres/Prisma: managed wallets
+(Provider Engine, Vendor as a swappable alternative), Lisk as the primary
 settlement rail with chain for cross-border corridors, escrow, KYC tiers
 with PIN verification, admin dashboard (users, wallets, transactions,
 escrows, KYC, audit logs, system health), and BullMQ-based background
 processing for webhook/voice/receipt jobs.
-
-### Multi-chain foundation (Lisk) — Built, deployment in progress
-
-- Chain-adapter pattern (`apps/api/src/wallet/`): chain and Lisk behind
-  one interface, product code never imports a chain SDK directly.
-- Every user gets a chain **and** a Lisk wallet — no "pick a chain" step.
-  `balance` reports both chains; a plain send detects the destination chain
-  from address shape and routes automatically.
-- Known gap, not hidden: Lisk Sepolia (testnet) has no faucet-equivalent
-  auto-fund API. New Lisk wallets are created but not auto-funded — the bot
-  gives manual faucet instructions instead of pretending funding happened.
-- Native assets only for now (TOKEN, native Lisk ETH) — no ERC-20/anchor-asset
-  support yet (the seam for it is `resolveAsset()` in each adapter).
 
 ### Gas sponsorship (paymaster) — Client built, no relayer exists
 
@@ -59,15 +45,19 @@ WhatsApp reply (additive follow-up, not a blocker for anything else).
 
 ### Explored but not merged
 
-A parallel line of work also explored AI-assisted WhatsApp command parsing
-as a fallback to the regex parser, a cross-chain bridging groundwork spike
-(chain leg via Allbridge Core), and a deposit-notification poller. None of
-that is part of this codebase — that work depended on the MongoDB
-persistence layer this repo no longer uses. It's preserved in git history on
-the `feat/multi-chain-foundation` branch (tip commit `d770f2c`) if any of it
-is worth re-implementing against the current Postgres/Prisma base later —
-the AI intent decoder and deposit-notification concepts are still plausible
-additions, just not as originally built.
+A parallel line of work explored a different architecture for wallets:
+direct key custody via a per-chain adapter pattern (chain + Lisk each
+behind their own adapter, every user holding both), AI-assisted WhatsApp
+command parsing as a fallback to the regex parser, a cross-chain bridging
+groundwork spike (chain leg via Allbridge Core), and a deposit-notification
+poller. None of that is part of this codebase — the wallet provisioning
+model above was chosen instead, and that work depended on the wallet-mapping
+model and the MongoDB persistence layer this repo no longer uses. It's
+preserved in git history on the `feat/multi-chain-foundation` branch (tip
+commit `d770f2c`) if any of it is worth re-implementing against the current
+Postgres/Prisma + provisioning base later — in particular the AI intent decoder and
+deposit-notification concepts are still plausible additions, just not as
+originally built.
 
 ---
 
@@ -77,8 +67,7 @@ additions, just not as originally built.
   serverless, see the [README](README.md#deployment) for why).
 - Apply the Prisma migration to a provisioned Neon database.
 - Point the WhatsApp webhook at the deployed host.
-- Configure a real Lisk RPC endpoint (`LISK_RPC_URL`) for mainnet or a less
-  rate-limited testnet provider.
+- Configure Provider Engine (or Vendor) credentials.
 - Wire the price oracle into a WhatsApp reply.
 
 ## Security & production readiness
@@ -86,28 +75,17 @@ additions, just not as originally built.
 - Build real per-user authentication for the compliance PIN and KYC-start
   REST endpoints (see [README](README.md#security-notes)) — the biggest open
   gap right now.
-- Managed secret/key management (KMS/HSM) in place of a single static
-  `SERVICE_SECRET` for wallet private keys; support key rotation.
+- Managed secret/key management (KMS/HSM) for provider credentials; support
+  key rotation.
 - Audit logging for sensitive actions (transfers, admin logins, compliance
   reviews) — audit log model exists, coverage isn't complete yet.
 - Monitoring and alerting — error alerting on the API host, alerts on
-  rpc/RPC submission failures, KYC provider failures, and webhook
-  signature rejections.
+  provider (Provider/Vendor/KYC) submission failures and webhook signature
+  rejections.
 - Replace the single shared admin password with per-admin accounts and
   roles.
 - Compliance review (KYC/AML/custody) before any mainnet or real-money
   launch.
-
-## Chain depth
-
-- Support at least one non-native asset per chain (chain assets via
-  `changeTrust`, Lisk ERC-20/bridged USDC) — the seam, `resolveAsset()` in
-  each adapter, is already there.
-- Implement SEP-10 (chain web authentication) — would give per-user
-  authentication to the REST wallet API, currently its main open security
-  gap alongside the compliance PIN/KYC-start endpoints.
-- Move from Lisk Sepolia to Lisk mainnet, and chain Testnet to mainnet,
-  with a vetted deployment for each.
 
 ## Test & robustness gaps
 
