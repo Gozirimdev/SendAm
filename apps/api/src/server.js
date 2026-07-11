@@ -1,13 +1,15 @@
-const mongoose = require('mongoose');
 const app = require('./app');
 const config = require('./config/env');
 const connectDB = require('./config/db');
 const { validateEnv } = require('./config/validateEnv');
+const prisma = require('./common/prisma');
 const logger = require('./utils/logger');
+const { registerJobs } = require('./jobs');
 
 const startServer = async () => {
   validateEnv(config);
   await connectDB();
+  registerJobs();
 
   const server = app.listen(config.port, () => {
     logger.info(`Server running in ${config.env} mode on port ${config.port}`);
@@ -20,9 +22,9 @@ const startServer = async () => {
     logger.info(`${signal} received — shutting down gracefully.`);
     server.close(async () => {
       try {
-        await mongoose.connection.close();
+        await prisma.$disconnect();
       } catch (error) {
-        logger.error('Error closing MongoDB connection:', error.message);
+        logger.error('Error closing PostgreSQL connection:', error.message);
       }
       process.exit(0);
     });

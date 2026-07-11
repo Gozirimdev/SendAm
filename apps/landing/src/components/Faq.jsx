@@ -3,20 +3,20 @@ import { ChevronDown } from 'lucide-react';
 
 const faqs = [
   {
-    q: 'Do I need a crypto app or wallet to start?',
-    a: 'No. SendAm works entirely inside WhatsApp. We create and manage a chain wallet for you — there are no apps to install and no seed phrases to write down.',
+    q: 'Do users need to understand crypto?',
+    a: 'No. Users interact through WhatsApp, phone numbers, contacts, receipts, PINs, and flows. The blockchain rail is selected by SendAm in the background.',
   },
   {
-    q: 'Is my money safe?',
-    a: 'Every wallet reference is encrypted before it is stored, and every transfer asks you to reply YES before any funds move. SendAm is currently a testnet MVP, so it uses test TOKEN rather than real money.',
+    q: 'Which blockchain does SendAm use?',
+    a: 'Lisk is the primary settlement layer. chain is used only for cross-border corridors where it is the better payment rail.',
   },
   {
-    q: 'What is TOKEN?',
-    a: 'TOKEN (Lumens) is the native asset of the chain network — a fast, low-cost blockchain built for payments. SendAm uses it to settle transfers in seconds.',
+    q: 'How are wallets managed?',
+    a: 'Every phone number maps to a managed wallet through a wallet provisioning provider such as Provider Engine. The app talks only to SendAm wallet services.',
   },
   {
-    q: 'Is this real money?',
-    a: 'Not yet. SendAm runs on the chain Testnet, so balances and transfers use test funds. This lets you try the full experience risk-free while the product matures toward a real-money launch.',
+    q: 'Is this production-ready today?',
+    a: 'The architecture is being upgraded for production, including KYC, PIN verification, queues, audit logs, and provider integrations. Live money movement should wait for credentials, contracts, compliance review, and monitoring.',
   },
 ];
 

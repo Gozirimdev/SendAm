@@ -52,3 +52,23 @@ export const getAdminTransactions = async ({ page = 1, limit = 50 } = {}) => {
   const { data } = await api.get('/admin/transactions', { params: { page, limit } });
   return data;
 };
+
+export const getAdminEscrows = async () => {
+  const { data } = await api.get('/admin/escrows');
+  return data;
+};
+
+export const getAdminKyc = async () => {
+  const { data } = await api.get('/admin/kyc');
+  return data;
+};
+
+export const getAdminAuditLogs = async () => {
+  const { data } = await api.get('/admin/audit-logs');
+  return data;
+};
+
+export const getAdminSystemHealth = async () => {
+  const { data } = await api.get('/admin/system-health');
+  return data;
+};
