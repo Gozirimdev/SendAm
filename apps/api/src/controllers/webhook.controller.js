@@ -18,12 +18,23 @@ const handleIncomingMessage = async (req, res) => {
   res.status(200).send('EVENT_RECEIVED');
 
   try {
+    logger.info('WhatsApp webhook POST received');
     const body = req.body;
-    if (body.object !== 'whatsapp_business_account') return;
+    if (body.object !== 'whatsapp_business_account') {
+      logger.warn(`Ignoring webhook object: ${body.object || 'unknown'}`);
+      return;
+    }
 
     const value = body.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
-    if (!message || !['text', 'audio', 'voice'].includes(message.type)) return;
+    if (!message) {
+      logger.info('Webhook had no inbound message payload');
+      return;
+    }
+    if (!['text', 'audio', 'voice'].includes(message.type)) {
+      logger.info(`Ignoring unsupported WhatsApp message type: ${message.type}`);
+      return;
+    }
 
     // Idempotency: Meta redelivers un-acked events, so dedup on message id
     // before doing anything with side effects. A duplicate insert throws on
@@ -42,6 +53,7 @@ const handleIncomingMessage = async (req, res) => {
 
     const from = message.from;
     const whatsappName = value?.contacts?.[0]?.profile?.name || '';
+    logger.info(`Queueing WhatsApp ${message.type} message from ${from}`);
 
     // Per-sender throttle. We don't 429 here (that would make Meta retry and
     // flag the webhook unhealthy) — instead we drop excess messages, warning
