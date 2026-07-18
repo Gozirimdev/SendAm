@@ -6,6 +6,7 @@ const logger = require('../utils/logger');
 const registerWhatsAppJobs = () => {
   registerProcessor('whatsapp-inbound', async (job) => {
     const { from, whatsappName, text, mediaId, messageType, whatsappMessageId } = job.data;
+    logger.info(`Processing WhatsApp ${messageType} job from ${from}`);
 
     if (messageType === 'audio' || messageType === 'voice') {
       await processVoiceMessage({ phoneNumber: from, whatsappName, mediaId, whatsappMessageId });

@@ -1,13 +1,11 @@
 const app = require('./app');
 const config = require('./config/env');
 const connectDB = require('./config/db');
-const { validateEnv } = require('./config/validateEnv');
 const prisma = require('./common/prisma');
 const logger = require('./utils/logger');
 const { registerJobs } = require('./jobs');
 
 const startServer = async () => {
-  validateEnv(config);
   await connectDB();
   registerJobs();
 

@@ -5,5 +5,5 @@ const server = new StellarSdk.Horizon.Server(config.stellar.horizonUrl);
 
 module.exports = {
   server,
-  StellarSdk,
+  StellarSdk
 };

@@ -6,6 +6,7 @@ CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "phoneNumber" TEXT NOT NULL,
     "whatsappName" TEXT,
+    "walletId" TEXT,
     "kycTier" INTEGER NOT NULL DEFAULT 0,
     "riskScore" INTEGER NOT NULL DEFAULT 0,
     "pinHash" TEXT,
@@ -22,12 +23,15 @@ CREATE TABLE "User" (
 CREATE TABLE "Wallet" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "chain" TEXT NOT NULL,
     "phoneNumber" TEXT,
+    "provider" TEXT NOT NULL DEFAULT 'thirdweb',
+    "providerWalletId" TEXT,
+    "address" TEXT,
     "publicKey" TEXT,
     "encryptedSecretKey" TEXT,
-    "funded" BOOLEAN NOT NULL DEFAULT false,
-    "network" TEXT NOT NULL DEFAULT 'testnet',
+    "primaryChain" TEXT NOT NULL DEFAULT 'lisk',
+    "supportedChains" TEXT[] DEFAULT ARRAY['lisk', 'stellar']::TEXT[],
+    "network" TEXT NOT NULL DEFAULT 'managed',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -266,7 +270,10 @@ CREATE TABLE "RateLimitHit" (
 CREATE UNIQUE INDEX "User_phoneNumber_key" ON "User"("phoneNumber");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Wallet_userId_chain_key" ON "Wallet"("userId", "chain");
+CREATE UNIQUE INDEX "User_walletId_key" ON "User"("walletId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Wallet_userId_key" ON "Wallet"("userId");
 
 -- CreateIndex
 CREATE INDEX "Wallet_phoneNumber_idx" ON "Wallet"("phoneNumber");

@@ -24,6 +24,7 @@ const sendTextMessage = async (to, body) => {
       }
     });
 
+    logger.info(`WhatsApp text message sent to ${to}`);
     return response.data;
   } catch (error) {
     logger.error('WhatsApp API Error:', error.response?.data || error.message);

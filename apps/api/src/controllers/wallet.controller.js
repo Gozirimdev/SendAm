@@ -1,7 +1,6 @@
 const { isValidPhoneNumber, isValidAmount } = require('../utils/validators');
 const { sendSuccess, sendError } = require('../utils/response');
 const walletService = require('../wallet/wallet.service');
-const { detectChainFromAddress } = require('../wallet/chainRegistry');
 const { executePayment } = require('../payment/payment.orchestrator');
 const prisma = require('../common/prisma');
 
@@ -15,11 +14,15 @@ const createWallet = async (req, res, next) => {
       user = await prisma.user.create({ data: { phoneNumber } });
     }
 
-    const wallets = await walletService.ensureWalletsForUser({ user });
+    const wallet = await walletService.createOrGetWallet({ user });
 
     return sendSuccess(res, {
-      wallets: wallets.map((w) => ({ chain: w.chain, publicKey: w.publicKey, funded: w.funded, network: w.network })),
-    }, 'Wallets ready', 201);
+      walletId: wallet._id,
+      address: wallet.address || wallet.publicKey,
+      provider: wallet.provider,
+      primaryChain: wallet.primaryChain,
+      supportedChains: wallet.supportedChains,
+    }, 'Managed wallet is ready', 201);
   } catch (error) {
     next(error);
   }
@@ -30,10 +33,11 @@ const checkBalance = async (req, res, next) => {
     const { phone } = req.params;
     if (!isValidPhoneNumber(phone)) return sendError(res, 'A valid phone number is required');
 
-    const balances = await walletService.balancesForUser({ phoneNumber: phone });
-    if (balances.length === 0) return sendError(res, 'Wallet not found for this phone number', 404);
+    const wallet = await walletService.getWalletByPhoneNumber(phone);
+    if (!wallet) return sendError(res, 'Wallet not found for this phone number', 404);
 
-    return sendSuccess(res, { balances }, 'Balances fetched successfully');
+    const balance = await walletService.balance({ wallet });
+    return sendSuccess(res, { balance, address: wallet.address || wallet.publicKey }, 'Balance fetched successfully');
   } catch (error) {
     next(error);
   }
@@ -46,9 +50,6 @@ const sendFunds = async (req, res, next) => {
     if (!isValidPhoneNumber(phoneNumber) || !isValidAmount(amount) || !destination) {
       return sendError(res, 'A valid phone number, amount, and destination are required');
     }
-    if (!detectChainFromAddress(destination)) {
-      return sendError(res, 'Destination must be a valid Stellar or Lisk address');
-    }
 
     const user = await prisma.user.findUnique({ where: { phoneNumber } });
     if (!user) return sendError(res, 'User not found', 404);
@@ -57,7 +58,7 @@ const sendFunds = async (req, res, next) => {
       sender: user,
       destination,
       amount,
-      asset: req.body.asset,
+      asset: req.body.asset || 'USDC',
       routeType: req.body.routeType,
       sourceCountry: req.body.sourceCountry,
       destinationCountry: req.body.destinationCountry,

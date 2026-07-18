@@ -1,4 +1,4 @@
-//# Contributing to SendAm
+# Contributing to SendAm
 
 Thank you for your interest in contributing to SendAm. SendAm is an open-source WhatsApp-first Stellar payments MVP focused on making blockchain payments easier for mobile-first users.
 
@@ -43,8 +43,6 @@ Larger areas include:
 - Contact and recipient management.
 - QR-code wallet sharing.
 - Compliance-aware production workflows.
-- Gas sponsorship (paymaster) and NGN price display are built but not yet
-  wired into the live flow — see [`ROADMAP.md`](ROADMAP.md).
 
 ## Local Setup
 
@@ -212,22 +210,6 @@ When contributing Stellar functionality:
 - Include Stellar Expert links where useful.
 - Be careful with custody-related changes.
 - Document any assumptions around assets, issuers, trustlines, or anchors.
-
-## Lisk Contribution Notes
-
-Lisk is reached through the managed Wallet-as-a-Service provider
-(`apps/api/src/wallet/`), not direct chain integration — see
-[`ARCHITECTURE.md`](ARCHITECTURE.md). When contributing Lisk-related
-functionality:
-
-- Use a testnet provider configuration, not mainnet.
-- Do not use real funds in development.
-- Product-level code (payment orchestration, the WhatsApp assistant, admin
-  reporting) should never call a provider SDK directly — go through
-  `WalletService`.
-- Document any assumptions around gas sponsorship or asset support — these
-  depend on privately-operated services described in `ARCHITECTURE.md`, not
-  code that ships in this repository.
 
 ## Documentation Contributions
 

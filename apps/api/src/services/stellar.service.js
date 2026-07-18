@@ -1,12 +1,9 @@
-// Stellar implementation of the chain-adapter interface (see ./chainRegistry.js).
 const { server, StellarSdk } = require('../config/stellar');
 const axios = require('axios');
 const logger = require('../utils/logger');
 const config = require('../config/env');
 
-const chain = 'stellar';
-
-const createWallet = () => {
+const createKeypair = () => {
   const keypair = StellarSdk.Keypair.random();
   return {
     publicKey: keypair.publicKey(),
@@ -14,8 +11,8 @@ const createWallet = () => {
   };
 };
 
-const validateAddress = (address) => {
-  return typeof address === 'string' && StellarSdk.StrKey.isValidEd25519PublicKey(address);
+const isValidPublicKey = (publicKey) => {
+  return StellarSdk.StrKey.isValidEd25519PublicKey(publicKey);
 };
 
 const getTransactionUrl = (txHash) => {
@@ -31,17 +28,17 @@ const FUNDING_MAX_ATTEMPTS = 3;
 // funding used to leave a user with an empty wallet and no way to recover.
 // Retry with linear backoff, and treat "account already exists" as success so
 // re-running create/`fund` on an already-funded wallet is idempotent.
-const fundTestnetAccount = async (publicKey) => {
+const fundAccount = async (publicKey) => {
   let lastError;
   for (let attempt = 1; attempt <= FUNDING_MAX_ATTEMPTS; attempt += 1) {
     try {
       const response = await axios.get(`https://friendbot.stellar.org?addr=${encodeURIComponent(publicKey)}`);
-      return { funded: true, data: response.data };
+      return response.data;
     } catch (error) {
       const body = JSON.stringify(error.response?.data || '');
       if (error.response?.status === 400 && /op_already_exists|already.*exist/i.test(body)) {
         logger.info(`Account ${publicKey} already funded; treating Friendbot 400 as success.`);
-        return { funded: true, alreadyFunded: true };
+        return { alreadyFunded: true };
       }
       lastError = error;
       logger.warn(`Friendbot funding attempt ${attempt}/${FUNDING_MAX_ATTEMPTS} for ${publicKey} failed: ${error.message}`);
@@ -88,9 +85,9 @@ const isBadSequence = (error) => {
   return codes?.transaction === 'tx_bad_seq';
 };
 
-const submitPayment = async ({ secretKey, destination, amount, asset = 'XLM' }) => {
+const sendPayment = async ({ secretKey, destination, amount, asset = 'XLM' }) => {
   try {
-    if (!validateAddress(destination)) {
+    if (!isValidPublicKey(destination)) {
       throw new Error('Destination must be a valid Stellar public key.');
     }
 
@@ -135,8 +132,7 @@ const submitPayment = async ({ secretKey, destination, amount, asset = 'XLM' }) 
       transaction.sign(sourceKeypair);
 
       try {
-        const txResponse = await server.submitTransaction(transaction);
-        return { txHash: txResponse.hash, explorerUrl: getTransactionUrl(txResponse.hash) };
+        return await server.submitTransaction(transaction);
       } catch (error) {
         if (isBadSequence(error) && attempt < SEND_MAX_ATTEMPTS) {
           lastError = error;
@@ -156,12 +152,11 @@ const submitPayment = async ({ secretKey, destination, amount, asset = 'XLM' }) 
 };
 
 module.exports = {
-  chain,
-  createWallet,
-  getBalance,
-  submitPayment,
-  resolveAsset,
-  validateAddress,
-  fundTestnetAccount,
+  createKeypair,
+  fundAccount,
   getTransactionUrl,
+  getBalance,
+  isValidPublicKey,
+  resolveAsset,
+  sendPayment,
 };
