@@ -63,8 +63,8 @@ export const getAdminKyc = async () => {
   return data;
 };
 
-export const getAdminAuditLogs = async () => {
-  const { data } = await api.get('/admin/audit-logs');
+export const getAdminAuditLogs = async (action) => {
+  const { data } = await api.get('/admin/audit-logs', { params: action ? { action } : undefined });
   return data;
 };
 
