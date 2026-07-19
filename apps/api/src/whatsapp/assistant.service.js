@@ -4,6 +4,8 @@ const { enforceTransactionPolicy } = require('../compliance/compliance.service')
 const { verifyPin } = require('../compliance/pin.service');
 const { sendTextMessage } = require('../services/whatsapp.service');
 const prisma = require('../common/prisma');
+const logger = require('../utils/logger');
+const sendamAi = require('../sendamAi/sendamAi.client');
 
 const PENDING_SEND_TTL_MS = 10 * 60 * 1000;
 
@@ -20,15 +22,25 @@ const resolveUser = async (phoneNumber, whatsappName) => {
   return user;
 };
 
-const parsePaymentIntent = (text) => {
-  const normalized = String(text || '').trim();
-  const sendMatch = normalized.match(/(?:send|pay|transfer)\s+([\d.]+)\s*([a-zA-Z]{2,5})?\s+(?:to\s+)?(.+)/i);
-  if (!sendMatch) return null;
-
+// Maps a sendam-ai /decode result onto the shape requestConfirmation()
+// expects, or returns null if it's not an actionable SEND. Never trusts the
+// amount blindly: compliance.service.js does Number(amount) comparisons
+// against spend limits, and every comparison against NaN is false — a
+// non-numeric amount would silently sail through those limit checks instead
+// of being rejected. asset defaults to 'USDC' here for the confirmation
+// message's display text (sendam-ai deliberately never guesses an asset);
+// executePayment() has its own separate 'USDC' default for the actual
+// transfer, so this default is about not showing the user "Amount: 5000
+// null", not about execution correctness.
+const mapDecodedIntent = (decoded) => {
+  if (!decoded || decoded.intent !== 'SEND') return null;
+  if (!decoded.recipient) return null;
+  const amount = Number(decoded.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
   return {
-    amount: sendMatch[1],
-    asset: (sendMatch[2] || 'USDC').toUpperCase(),
-    recipient: sendMatch[3].trim(),
+    amount: decoded.amount,
+    asset: (decoded.asset || 'USDC').toUpperCase(),
+    recipient: decoded.recipient,
   };
 };
 
@@ -151,7 +163,17 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
     return;
   }
 
-  const paymentIntent = parsePaymentIntent(text);
+  let decoded = null;
+  try {
+    decoded = await sendamAi.decode(text, { userId: user.id });
+  } catch (error) {
+    // A sendam-ai outage/misconfiguration must not cost the user their
+    // message — fall through to the generic help reply below, same as an
+    // unrecognized command today.
+    logger.warn(`sendam-ai decode failed for ${phoneNumber}: ${error.message}`);
+  }
+
+  const paymentIntent = mapDecodedIntent(decoded);
   if (paymentIntent) {
     await requestConfirmation({ phoneNumber, user, intent: paymentIntent });
     return;
@@ -162,5 +184,5 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
 
 module.exports = {
   processMessage,
-  parsePaymentIntent,
+  mapDecodedIntent,
 };
