@@ -42,12 +42,12 @@ test('decode retries once after a timeout and succeeds on the warm retry', async
       req.on('data', (chunk) => { body += chunk; });
       req.on('end', () => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ intent: 'SEND', amount: '5000', asset: 'USDC', recipient: 'ada', confidence: 0.9 }));
+        res.end(JSON.stringify({ intent: 'SEND', amount: '5000', asset: 'USDC', recipient: 'ada', confidence: 0.9, reply: null }));
       });
     },
     async (sendamAi) => {
       const result = await sendamAi.decode('send 5k to ada', { userId: 'u1' });
-      assert.deepEqual(result, { intent: 'SEND', amount: '5000', asset: 'USDC', recipient: 'ada', confidence: 0.9 });
+      assert.deepEqual(result, { intent: 'SEND', amount: '5000', asset: 'USDC', recipient: 'ada', confidence: 0.9, reply: null });
       assert.equal(requestCount, 2);
     },
   );
