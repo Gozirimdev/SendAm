@@ -71,6 +71,9 @@ module.exports = {
   sendamAi: {
     baseUrl: process.env.SENDAM_AI_BASE_URL || 'https://intent-decoder.onrender.com',
     signingSecret: process.env.SENDAM_AI_SIGNING_SECRET,
+    // Overridable so tests can use a short fuse instead of waiting out a
+    // real cold-start-sized timeout. See sendamAi.client.js for the default.
+    timeoutMs: Number(process.env.SENDAM_AI_TIMEOUT_MS) || 30000,
   },
   lisk: {
     chainId: process.env.LISK_CHAIN_ID || 'lisk',

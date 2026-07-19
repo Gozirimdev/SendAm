@@ -1,6 +1,7 @@
 const axios = require('axios');
 const config = require('../config/env');
 const { signRequest } = require('./signing');
+const logger = require('../utils/logger');
 
 const configured = () => Boolean(config.sendamAi.baseUrl && config.sendamAi.signingSecret);
 
@@ -12,12 +13,18 @@ const client = () => {
     baseURL: config.sendamAi.baseUrl.replace(/\/$/, ''),
     // Measured live against the Render deployment: a cold start (free tier
     // spins down after idle) takes ~10s to respond, a warm instance ~2s.
-    // 15s covers a cold start without stalling a WhatsApp reply forever;
-    // still shorter than the 30s used for provider/vendor since this call
-    // sits inline in a user-facing reply path, not a "please wait" action.
-    timeout: 15000,
+    // Default 30s (config.sendamAi.timeoutMs) leaves headroom for a slower
+    // cold start; the one-shot retry below means most requests don't need
+    // that full headroom anyway.
+    timeout: config.sendamAi.timeoutMs,
   });
 };
+
+// A cold start only affects the request that wakes the instance up — by the
+// time we retry, it's warm. One retry is enough; a second timeout means
+// something other than cold-start latency is wrong, so we give up and let
+// the caller fall back.
+const MAX_ATTEMPTS = 2;
 
 // We sign the exact string we send. Passing a pre-stringified body (rather
 // than a plain object) means axios sends it byte-for-byte untouched, so the
@@ -27,18 +34,28 @@ const client = () => {
 // we signed.
 const post = async (path, payload) => {
   const rawBody = JSON.stringify(payload);
-  const headers = {
-    'Content-Type': 'application/json',
-    ...signRequest(rawBody, config.sendamAi.signingSecret, Date.now()),
-  };
-  try {
-    const response = await client().post(path, rawBody, { headers });
-    return response.data;
-  } catch (error) {
-    const status = error.response?.status;
-    const code = error.response?.data?.code;
-    const message = error.response?.data?.message || error.message;
-    throw new Error(`sendam-ai ${path} failed${status ? ` (${status}${code ? ` ${code}` : ''})` : ''}: ${message}`);
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const headers = {
+      'Content-Type': 'application/json',
+      // Signed fresh per attempt: sendam-ai validates timestamp freshness,
+      // and a retry can land seconds after the first attempt's timestamp.
+      ...signRequest(rawBody, config.sendamAi.signingSecret, Date.now()),
+    };
+    try {
+      const response = await client().post(path, rawBody, { headers });
+      return response.data;
+    } catch (error) {
+      const isTimeout = error.code === 'ECONNABORTED';
+      if (isTimeout && attempt < MAX_ATTEMPTS) {
+        logger.warn(`sendam-ai ${path} timed out on attempt ${attempt}, retrying (likely a cold start)`);
+        continue;
+      }
+      const status = error.response?.status;
+      const code = error.response?.data?.code;
+      const message = error.response?.data?.message || error.message;
+      throw new Error(`sendam-ai ${path} failed${status ? ` (${status}${code ? ` ${code}` : ''})` : ''}: ${message}`);
+    }
   }
 };
 
