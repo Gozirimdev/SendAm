@@ -17,8 +17,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm run prisma:generate --workspace=apps/api
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/test
       # Unit tests (parser, crypto, admin auth, transfer guardrails, recipient
-      # resolution, validators) — no database required.
+      # resolution, validators) — no live database connection required.
       - run: npm test
 
   frontend:

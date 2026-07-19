@@ -64,6 +64,14 @@ module.exports = {
     apiUrl: process.env.OPENFORT_API_URL || 'https://api.openfort.io',
     secretKey: process.env.OPENFORT_SECRET_KEY,
   },
+  // sendam-ai: already-deployed HTTP service that turns free-form chat text
+  // into a structured, closed-world intent (POST /decode). Requests are
+  // HMAC-SHA256 signed over the raw JSON body; SENDAM_AI_SIGNING_SECRET must
+  // be the exact same value as SERVICE_SIGNING_SECRET on the sendam-ai side.
+  sendamAi: {
+    baseUrl: process.env.SENDAM_AI_BASE_URL || 'https://intent-decoder.onrender.com',
+    signingSecret: process.env.SENDAM_AI_SIGNING_SECRET,
+  },
   lisk: {
     chainId: process.env.LISK_CHAIN_ID || 'lisk',
     rpcUrl: process.env.LISK_RPC_URL,
