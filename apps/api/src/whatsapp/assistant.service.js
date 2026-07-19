@@ -6,6 +6,7 @@ const { sendTextMessage } = require('../services/whatsapp.service');
 const prisma = require('../common/prisma');
 const logger = require('../utils/logger');
 const sendamAi = require('../sendamAi/sendamAi.client');
+const { writeAuditLog } = require('../common/audit.service');
 
 const PENDING_SEND_TTL_MS = 10 * 60 * 1000;
 
@@ -166,11 +167,27 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
   let decoded = null;
   try {
     decoded = await sendamAi.decode(text, { userId: user.id });
+    await writeAuditLog({
+      actorType: 'user',
+      actorId: user.id,
+      action: 'sendam_ai.decode',
+      entityType: 'User',
+      entityId: user.id,
+      metadata: { request: { text, userId: user.id }, response: decoded },
+    });
   } catch (error) {
     // A sendam-ai outage/misconfiguration must not cost the user their
     // message — fall through to the generic help reply below, same as an
     // unrecognized command today.
     logger.warn(`sendam-ai decode failed for ${phoneNumber}: ${error.message}`);
+    await writeAuditLog({
+      actorType: 'user',
+      actorId: user.id,
+      action: 'sendam_ai.decode',
+      entityType: 'User',
+      entityId: user.id,
+      metadata: { request: { text, userId: user.id }, error: error.message },
+    });
   }
 
   const paymentIntent = mapDecodedIntent(decoded);

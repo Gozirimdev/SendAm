@@ -162,9 +162,11 @@ const getKycProfiles = async (_req, res, next) => {
   }
 };
 
-const getAuditLogs = async (_req, res, next) => {
+const getAuditLogs = async (req, res, next) => {
   try {
+    const { action } = req.query;
     const logs = await prisma.auditLog.findMany({
+      where: action ? { action } : undefined,
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
