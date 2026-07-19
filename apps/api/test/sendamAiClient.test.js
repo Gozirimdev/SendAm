@@ -67,14 +67,3 @@ test('decode gives up and throws after two consecutive timeouts', async () => {
   );
 });
 
-test('warmup resolves without throwing when the instance responds, even with a non-2xx status', async () => {
-  await withClient(
-    (req, res) => {
-      res.writeHead(404);
-      res.end();
-    },
-    async (sendamAi) => {
-      await assert.doesNotReject(() => sendamAi.warmup());
-    },
-  );
-});

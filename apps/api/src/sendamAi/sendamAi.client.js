@@ -14,9 +14,8 @@ const client = () => {
     // Measured live against the Render deployment: a cold start (free tier
     // spins down after idle) takes ~10s to respond, a warm instance ~2s.
     // Default 30s (config.sendamAi.timeoutMs) leaves headroom for a slower
-    // cold start; a keep-alive ping (jobs/sendamAiKeepAlive.job.js) and the
-    // one-shot retry below exist so most requests don't need that headroom
-    // at all.
+    // cold start; the one-shot retry below means most requests don't need
+    // that full headroom anyway.
     timeout: config.sendamAi.timeoutMs,
   });
 };
@@ -76,19 +75,4 @@ const decode = async (text, { userId } = {}) => {
   };
 };
 
-// Fire-and-forget ping to keep the Render free-tier instance warm so a real
-// decode() call doesn't pay the cold-start latency. Any HTTP response (even
-// a 404) proves the instance is awake; only a network-level failure (no
-// response at all) is worth logging.
-const warmup = async () => {
-  if (!configured()) return;
-  try {
-    await client().get('/');
-  } catch (error) {
-    if (!error.response) {
-      logger.warn(`sendam-ai warmup ping failed: ${error.message}`);
-    }
-  }
-};
-
-module.exports = { decode, configured, warmup };
+module.exports = { decode, configured };
