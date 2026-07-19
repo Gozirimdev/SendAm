@@ -45,6 +45,19 @@ const mapDecodedIntent = (decoded) => {
   };
 };
 
+// sendam-ai reads the feeling behind the user's own words and opens in a
+// matching tone rather than one fixed line every time — reply is the only
+// field it fills in for GREETING (every other intent leaves it null), so a
+// missing/empty reply here means something upstream is wrong, not that
+// GREETING itself is unhandled. Fall back to a static line rather than
+// silently treating it as an unrecognized message.
+const FALLBACK_GREETING_REPLY = 'Hi! I can help you send money, check balance, receive money, start escrow, find cash-out agents, or show receipts.';
+
+const resolveGreetingReply = (decoded) => {
+  if (!decoded || decoded.intent !== 'GREETING') return null;
+  return decoded.reply || FALLBACK_GREETING_REPLY;
+};
+
 const resolveRecipient = async (user, recipient) => {
   const alias = String(recipient || '').trim().toLowerCase();
   const savedAlias = await prisma.alias.findUnique({
@@ -125,7 +138,11 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
 
   const normalized = String(text || '').trim().toLowerCase();
 
-  if (['hi', 'hello', 'help', 'menu'].includes(normalized)) {
+  // 'hi'/'hello' deliberately fall through to sendam-ai below instead of a
+  // static reply here — GREETING now gets a tone-matched response instead of
+  // one fixed line every time. 'help'/'menu' stay static: they're an
+  // explicit request for the command list, not a greeting.
+  if (['help', 'menu'].includes(normalized)) {
     await sendTextMessage(phoneNumber, 'SendAm can help with send money, receive money, balance, escrow, nearby cash-out, contacts, transaction history, and receipts.');
     return;
   }
@@ -190,6 +207,12 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
     });
   }
 
+  const greetingReply = resolveGreetingReply(decoded);
+  if (greetingReply) {
+    await sendTextMessage(phoneNumber, greetingReply);
+    return;
+  }
+
   const paymentIntent = mapDecodedIntent(decoded);
   if (paymentIntent) {
     await requestConfirmation({ phoneNumber, user, intent: paymentIntent });
@@ -202,4 +225,5 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
 module.exports = {
   processMessage,
   mapDecodedIntent,
+  resolveGreetingReply,
 };
