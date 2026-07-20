@@ -72,6 +72,9 @@ const decode = async (text, { userId } = {}) => {
     asset: data.asset,
     recipient: data.recipient,
     confidence: data.confidence,
+    // Only ever non-null for GREETING — a tone-matched, ready-to-send reply.
+    // Every other intent leaves this null; the caller supplies its own copy.
+    reply: data.reply,
   };
 };
 
