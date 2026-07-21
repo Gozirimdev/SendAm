@@ -7,16 +7,18 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  phoneNumber  String    @unique
-  whatsappName String?
-  walletId     String?   @unique
-  kycTier      Int       @default(0)
-  riskScore    Int       @default(0)
-  pinHash      String?
-  pinSetAt     DateTime?
-  pendingSend  Json?
-  contactsJson Json?
+  id            String    @id @default(cuid())
+  phoneNumber   String    @unique
+  whatsappName  String?
+  preferredName String?
+  walletId      String?   @unique
+  kycTier       Int       @default(0)
+  riskScore     Int       @default(0)
+  pinHash       String?
+  pinSetAt      DateTime?
+  pendingSend   Json?
+  pendingFlow   Json?
+  contactsJson  Json?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

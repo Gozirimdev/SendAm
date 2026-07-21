@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 // nothing here ever issues a real query.
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://user:pass@localhost:5432/test';
 
-const { mapDecodedIntent, resolveGreetingReply } = require('../src/whatsapp/assistant.service');
+const { mapDecodedIntent, resolveGreetingReply, isRegistered } = require('../src/whatsapp/assistant.service');
 
 test('maps a valid SEND decode result, defaulting a missing asset to USDC', () => {
   const result = mapDecodedIntent({ intent: 'SEND', amount: '5000', asset: null, recipient: 'ada', confidence: 0.92 });
@@ -44,4 +44,11 @@ test('resolveGreetingReply returns null for non-GREETING intents', () => {
   assert.equal(resolveGreetingReply({ intent: 'SEND', reply: null }), null);
   assert.equal(resolveGreetingReply({ intent: 'UNKNOWN' }), null);
   assert.equal(resolveGreetingReply(null), null);
+});
+
+test('isRegistered is true only once a wallet has been provisioned', () => {
+  assert.equal(isRegistered({ walletId: 'wallet_1' }), true);
+  assert.equal(isRegistered({ walletId: null }), false);
+  assert.equal(isRegistered({}), false);
+  assert.equal(isRegistered(null), false);
 });

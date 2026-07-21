@@ -67,3 +67,50 @@ test('decode gives up and throws after two consecutive timeouts', async () => {
   );
 });
 
+test('flowStart posts to /flow/start and returns the minted token', async () => {
+  await withClient(
+    (req, res) => {
+      assert.equal(req.url, '/flow/start');
+      let body = '';
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', () => {
+        const parsed = JSON.parse(body);
+        assert.equal(parsed.flow, 'onboarding');
+        assert.deepEqual(parsed.awaiting, [{ slot: 'name', type: 'FREE_TEXT', description: 'name?' }]);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ token: 'T1', expiresAt: 123 }));
+      });
+    },
+    async (sendamAi) => {
+      const result = await sendamAi.flowStart('onboarding', {}, [{ slot: 'name', type: 'FREE_TEXT', description: 'name?' }]);
+      assert.deepEqual(result, { token: 'T1', expiresAt: 123 });
+    },
+  );
+});
+
+test('decodeFollowUp maps a COMPLETE response', async () => {
+  await withClient(
+    (req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'COMPLETE', flow: 'onboarding', intent: null, slots: { name: 'Ada' }, confidence: 0.9 }));
+    },
+    async (sendamAi) => {
+      const result = await sendamAi.decodeFollowUp('Ada', 'T1');
+      assert.deepEqual(result, { status: 'COMPLETE', flow: 'onboarding', slots: { name: 'Ada' }, confidence: 0.9 });
+    },
+  );
+});
+
+test('decodeFollowUp maps an IN_PROGRESS response', async () => {
+  await withClient(
+    (req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'IN_PROGRESS', flow: 'onboarding', token: 'T2', slots: {} }));
+    },
+    async (sendamAi) => {
+      const result = await sendamAi.decodeFollowUp('huh', 'T1');
+      assert.deepEqual(result, { status: 'IN_PROGRESS', flow: 'onboarding', token: 'T2', slots: {} });
+    },
+  );
+});
+

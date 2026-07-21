@@ -78,4 +78,23 @@ const decode = async (text, { userId } = {}) => {
   };
 };
 
-module.exports = { decode, configured };
+// Mints a signed token for a multi-turn flow the caller wants to run (e.g.
+// collecting a name during onboarding). Pure signing, no model call on
+// sendam-ai's side — see decodeFollowUp for resolving the user's reply.
+const flowStart = async (flow, slots, awaiting) => {
+  const data = await post('/flow/start', { flow, slots, awaiting });
+  return { token: data.token, expiresAt: data.expiresAt };
+};
+
+// Resolves one reply against a flow token minted by flowStart. Either the
+// flow needs another turn (IN_PROGRESS, with a new token replacing the old
+// one) or it's done (COMPLETE, with every slot resolved so far).
+const decodeFollowUp = async (text, token) => {
+  const data = await post('/decode', { text, token });
+  if (data.status === 'COMPLETE') {
+    return { status: 'COMPLETE', flow: data.flow, slots: data.slots, confidence: data.confidence };
+  }
+  return { status: 'IN_PROGRESS', flow: data.flow, token: data.token, slots: data.slots };
+};
+
+module.exports = { decode, flowStart, decodeFollowUp, configured };

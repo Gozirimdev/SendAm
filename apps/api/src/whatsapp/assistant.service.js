@@ -9,6 +9,10 @@ const sendamAi = require('../sendamAi/sendamAi.client');
 const { writeAuditLog } = require('../common/audit.service');
 
 const PENDING_SEND_TTL_MS = 10 * 60 * 1000;
+// Matches sendam-ai's default flow token TTL (15 min) — no point outliving
+// the token we'd be resuming.
+const PENDING_FLOW_TTL_MS = 15 * 60 * 1000;
+const ONBOARDING_FLOW = 'onboarding';
 
 const resolveUser = async (phoneNumber, whatsappName) => {
   let user = await prisma.user.findUnique({ where: { phoneNumber } });
@@ -56,6 +60,80 @@ const FALLBACK_GREETING_REPLY = 'Hi! I can help you send money, check balance, r
 const resolveGreetingReply = (decoded) => {
   if (!decoded || decoded.intent !== 'GREETING') return null;
   return decoded.reply || FALLBACK_GREETING_REPLY;
+};
+
+// walletId is only ever set once account.service.js finishes provisioning a
+// wallet (see createOrGetWallet) — a bare User row exists for every sender
+// from their first message, so it alone can't signal "registered".
+const isRegistered = (user) => Boolean(user?.walletId);
+
+const ONBOARDING_PITCH =
+  "Hey! I'm SendAm — send and receive crypto right here on WhatsApp, no exchange or app needed. Takes about 30 seconds to get set up. What should I call you?";
+
+// Starts the sendam-ai "onboarding" flow to collect a name, then stores the
+// token the same way requestConfirmation() stores pendingSend: on the User
+// row, resumed on the next incoming message via handlePendingFlow.
+const startOnboarding = async ({ phoneNumber, user }) => {
+  const { token } = await sendamAi.flowStart(
+    ONBOARDING_FLOW,
+    {},
+    [{ slot: 'name', type: 'FREE_TEXT', description: "what the user wants to be called, for a wallet you're about to create them" }]
+  );
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { pendingFlow: { flow: ONBOARDING_FLOW, token, expiresAt: Date.now() + PENDING_FLOW_TTL_MS } },
+  });
+  await sendTextMessage(phoneNumber, ONBOARDING_PITCH);
+};
+
+const completeOnboarding = async ({ phoneNumber, user, name }) => {
+  if (name) {
+    await prisma.user.update({ where: { id: user.id }, data: { preferredName: name } });
+  }
+  await walletService.createOrGetWallet({ user });
+  await sendTextMessage(
+    phoneNumber,
+    `You're all set${name ? `, ${name}` : ''}! Your wallet's ready — send "balance" to check your funds, or just tell me who to send money to.`
+  );
+};
+
+// Mirrors handlePendingPin's shape: resumes a flow started by
+// startOnboarding (or any future flow) against the next message that comes
+// in, short-circuiting normal /decode routing while one is in flight.
+const handlePendingFlow = async ({ phoneNumber, user, text }) => {
+  const pending = user.pendingFlow;
+  if (!pending?.token) return false;
+
+  if (Date.now() > pending.expiresAt) {
+    await prisma.user.update({ where: { id: user.id }, data: { pendingFlow: null } });
+    await sendTextMessage(phoneNumber, "That took a bit long and expired — say hi again and we'll pick up where we left off.");
+    return true;
+  }
+
+  let result;
+  try {
+    result = await sendamAi.decodeFollowUp(text, pending.token);
+  } catch (error) {
+    logger.warn(`sendam-ai flow follow-up failed for ${phoneNumber}: ${error.message}`);
+    await prisma.user.update({ where: { id: user.id }, data: { pendingFlow: null } });
+    await sendTextMessage(phoneNumber, 'Something went wrong there — say hi again and we\'ll restart.');
+    return true;
+  }
+
+  if (result.status === 'IN_PROGRESS') {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { pendingFlow: { flow: result.flow, token: result.token, expiresAt: Date.now() + PENDING_FLOW_TTL_MS } },
+    });
+    await sendTextMessage(phoneNumber, "Sorry, didn't catch that — what should I call you?");
+    return true;
+  }
+
+  await prisma.user.update({ where: { id: user.id }, data: { pendingFlow: null } });
+  if (result.flow === ONBOARDING_FLOW) {
+    await completeOnboarding({ phoneNumber, user, name: result.slots?.name });
+  }
+  return true;
 };
 
 const resolveRecipient = async (user, recipient) => {
@@ -135,6 +213,7 @@ const handlePendingPin = async ({ phoneNumber, user, text }) => {
 const processMessage = async (phoneNumber, whatsappName, text) => {
   const user = await resolveUser(phoneNumber, whatsappName);
   if (await handlePendingPin({ phoneNumber, user, text })) return;
+  if (await handlePendingFlow({ phoneNumber, user, text })) return;
 
   const normalized = String(text || '').trim().toLowerCase();
 
@@ -209,6 +288,16 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
 
   const greetingReply = resolveGreetingReply(decoded);
   if (greetingReply) {
+    if (!isRegistered(user)) {
+      try {
+        await startOnboarding({ phoneNumber, user });
+        return;
+      } catch (error) {
+        // sendam-ai outage/misconfiguration mid-pitch: fall through to the
+        // normal greeting rather than leaving the user with no reply at all.
+        logger.warn(`sendam-ai flow/start failed for ${phoneNumber}: ${error.message}`);
+      }
+    }
     await sendTextMessage(phoneNumber, greetingReply);
     return;
   }
@@ -226,4 +315,5 @@ module.exports = {
   processMessage,
   mapDecodedIntent,
   resolveGreetingReply,
+  isRegistered,
 };
