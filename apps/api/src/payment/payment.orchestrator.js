@@ -4,6 +4,7 @@ const { createQuote } = require('../pricing/pricing.service');
 const { writeAuditLog } = require('../common/audit.service');
 const { enforceTransactionPolicy } = require('../compliance/compliance.service');
 const { ensureGas } = require('./gasTopup');
+const { recordFeeReconciliation } = require('./settlementReconciliation');
 const config = require('../config/env');
 const prisma = require('../common/prisma');
 const { withIdAlias } = require('../common/records');
@@ -96,6 +97,9 @@ const executePayment = async ({
           txHash: result.transactionHash || result.txHash,
         },
       });
+      // Fire-and-record: recordFeeReconciliation catches and logs its own
+      // errors, so a settlement outage never gates the payment response.
+      recordFeeReconciliation({ transaction });
     } else if (rail === 'stellar') {
       transaction = await prisma.transaction.update({
         where: { id: transaction.id },

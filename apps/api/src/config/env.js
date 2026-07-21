@@ -105,6 +105,9 @@ module.exports = {
     baseUrl: process.env.SETTLEMENT_BASE_URL,
     signingSecret: process.env.SETTLEMENT_SIGNING_SECRET,
     timeoutMs: Number(process.env.SETTLEMENT_TIMEOUT_MS) || 15000,
+    // The ledger account fee revenue from executed on-chain sends is
+    // recorded against, purely for internal reconciliation — not a real user.
+    treasuryUserId: process.env.SETTLEMENT_TREASURY_USER_ID || 'treasury',
   },
   stellar: {
     network: process.env.STELLAR_NETWORK || 'testnet',
