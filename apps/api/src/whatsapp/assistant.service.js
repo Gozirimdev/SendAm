@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const walletService = require('../wallet/account.service');
 const { executePayment } = require('../payment/payment.orchestrator');
 const { enforceTransactionPolicy } = require('../compliance/compliance.service');
@@ -6,9 +7,16 @@ const { sendTextMessage } = require('../services/whatsapp.service');
 const prisma = require('../common/prisma');
 const logger = require('../utils/logger');
 const sendamAi = require('../sendamAi/sendamAi.client');
+const config = require('../config/env');
 const { writeAuditLog } = require('../common/audit.service');
 
 const PENDING_SEND_TTL_MS = 10 * 60 * 1000;
+// Matches sendam-ai's default flow token TTL (15 min) — no point outliving
+// the token we'd be resuming.
+const PENDING_FLOW_TTL_MS = 15 * 60 * 1000;
+const COLLECT_NAME_FLOW = 'collect_name';
+const GET_STARTED_TTL_MS = 15 * 60 * 1000;
+const REGISTRATION_TOKEN_TTL_MS = 30 * 60 * 1000;
 
 const resolveUser = async (phoneNumber, whatsappName) => {
   let user = await prisma.user.findUnique({ where: { phoneNumber } });
@@ -56,6 +64,140 @@ const FALLBACK_GREETING_REPLY = 'Hi! I can help you send money, check balance, r
 const resolveGreetingReply = (decoded) => {
   if (!decoded || decoded.intent !== 'GREETING') return null;
   return decoded.reply || FALLBACK_GREETING_REPLY;
+};
+
+const NAME_PITCH =
+  "Hey! I'm SendAm — send and receive crypto right here on WhatsApp, no exchange or app needed. What should I call you?";
+
+// sendam-ai reads tone but never receives a name, so it can't personalize its
+// own GREETING copy — we do that locally by addressing the user before their
+// (lowercased) reply, e.g. "Ada, hey! good to hear from you — ...".
+const personalizeGreeting = (reply, name) => {
+  if (!name || !reply) return reply;
+  return `${name}, ${reply.charAt(0).toLowerCase()}${reply.slice(1)}`;
+};
+
+// Starts the sendam-ai "collect_name" flow, then stores the token the same
+// way requestConfirmation() stores pendingSend: on the User row, resumed on
+// the next incoming message via handlePendingFlow. This only ever collects a
+// name for personalization — it does not register the user or create a
+// wallet (see sendRegistrationLink for that, gated behind an explicit yes).
+const startNameCollection = async ({ phoneNumber, user }) => {
+  const { token } = await sendamAi.flowStart(
+    COLLECT_NAME_FLOW,
+    {},
+    [{ slot: 'name', type: 'FREE_TEXT', description: 'what the user wants to be called, so replies can address them by name' }]
+  );
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { pendingFlow: { flow: COLLECT_NAME_FLOW, token, expiresAt: Date.now() + PENDING_FLOW_TTL_MS } },
+  });
+  await sendTextMessage(phoneNumber, NAME_PITCH);
+};
+
+// Mints a single-use, expiring link to the browser onboarding form
+// (apps/landing's /onboard page), which collects final confirmation + terms
+// acceptance and is what actually provisions the wallet on submit — see
+// apps/api/src/onboarding/onboarding.service.js::completeRegistration.
+const sendRegistrationLink = async ({ phoneNumber, user }) => {
+  const token = crypto.randomBytes(24).toString('hex');
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { registrationToken: token, registrationTokenExpiresAt: new Date(Date.now() + REGISTRATION_TOKEN_TTL_MS) },
+  });
+  const url = `${config.landing.baseUrl.replace(/\/$/, '')}/onboard?token=${token}`;
+  await sendTextMessage(
+    phoneNumber,
+    `Great! Finish setting up your wallet here (takes under a minute): ${url}\nThis link expires in 30 minutes.`
+  );
+};
+
+const completeNameCollection = async ({ phoneNumber, user, name }) => {
+  if (!name) {
+    await sendTextMessage(phoneNumber, "No worries — you can tell me your name anytime by saying hi.");
+    return;
+  }
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { preferredName: name, awaitingGetStartedUntil: new Date(Date.now() + GET_STARTED_TTL_MS) },
+  });
+  await sendTextMessage(
+    phoneNumber,
+    `Nice to meet you, ${name}! Want me to set up your SendAm wallet now, so you can send and receive money right here on WhatsApp? (yes/no)`
+  );
+};
+
+// Mirrors handlePendingPin's shape: resumes a flow started by
+// startNameCollection (or any future flow) against the next message that
+// comes in, short-circuiting normal /decode routing while one is in flight.
+const handlePendingFlow = async ({ phoneNumber, user, text }) => {
+  const pending = user.pendingFlow;
+  if (!pending?.token) return false;
+
+  if (Date.now() > pending.expiresAt) {
+    await prisma.user.update({ where: { id: user.id }, data: { pendingFlow: null } });
+    await sendTextMessage(phoneNumber, "That took a bit long and expired — say hi again and we'll pick up where we left off.");
+    return true;
+  }
+
+  let result;
+  try {
+    result = await sendamAi.decodeFollowUp(text, pending.token);
+  } catch (error) {
+    logger.warn(`sendam-ai flow follow-up failed for ${phoneNumber}: ${error.message}`);
+    await prisma.user.update({ where: { id: user.id }, data: { pendingFlow: null } });
+    await sendTextMessage(phoneNumber, 'Something went wrong there — say hi again and we\'ll restart.');
+    return true;
+  }
+
+  if (result.status === 'IN_PROGRESS') {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { pendingFlow: { flow: result.flow, token: result.token, expiresAt: Date.now() + PENDING_FLOW_TTL_MS } },
+    });
+    await sendTextMessage(phoneNumber, "Sorry, didn't catch that — what should I call you?");
+    return true;
+  }
+
+  await prisma.user.update({ where: { id: user.id }, data: { pendingFlow: null } });
+  if (result.flow === COLLECT_NAME_FLOW) {
+    await completeNameCollection({ phoneNumber, user, name: result.slots?.name });
+  }
+  return true;
+};
+
+const GET_STARTED_YES_WORDS = ['yes', 'yeah', 'yep', 'yea', 'sure', 'ok', 'okay', 'go ahead', "let's go", 'lets go'];
+const GET_STARTED_NO_WORDS = ['no', 'nope', 'nah', 'not now', 'later', 'maybe later'];
+
+// Resumes the yes/no prompt sent by completeNameCollection. Deliberately a
+// plain local word-match rather than another sendam-ai round trip — this is
+// a two-way fork, not free-form text needing intent classification.
+const handleGetStartedReply = async ({ phoneNumber, user, text }) => {
+  if (!user.awaitingGetStartedUntil) return false;
+
+  if (Date.now() > new Date(user.awaitingGetStartedUntil).getTime()) {
+    // Stale prompt — clear it and let the message fall through to normal
+    // routing instead of forcing a yes/no reading on an unrelated message.
+    await prisma.user.update({ where: { id: user.id }, data: { awaitingGetStartedUntil: null } });
+    return false;
+  }
+
+  const lowered = String(text).trim().toLowerCase().replace(/[.!]+$/, '');
+
+  if (GET_STARTED_YES_WORDS.includes(lowered)) {
+    await prisma.user.update({ where: { id: user.id }, data: { awaitingGetStartedUntil: null } });
+    await sendRegistrationLink({ phoneNumber, user });
+    return true;
+  }
+
+  if (GET_STARTED_NO_WORDS.includes(lowered)) {
+    await prisma.user.update({ where: { id: user.id }, data: { awaitingGetStartedUntil: null } });
+    await sendTextMessage(phoneNumber, "All good — just say the word whenever you're ready to get set up.");
+    return true;
+  }
+
+  await sendTextMessage(phoneNumber, 'Just a yes or no works — want me to set up your wallet now?');
+  return true;
 };
 
 const resolveRecipient = async (user, recipient) => {
@@ -135,6 +277,8 @@ const handlePendingPin = async ({ phoneNumber, user, text }) => {
 const processMessage = async (phoneNumber, whatsappName, text) => {
   const user = await resolveUser(phoneNumber, whatsappName);
   if (await handlePendingPin({ phoneNumber, user, text })) return;
+  if (await handlePendingFlow({ phoneNumber, user, text })) return;
+  if (await handleGetStartedReply({ phoneNumber, user, text })) return;
 
   const normalized = String(text || '').trim().toLowerCase();
 
@@ -209,7 +353,21 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
 
   const greetingReply = resolveGreetingReply(decoded);
   if (greetingReply) {
-    await sendTextMessage(phoneNumber, greetingReply);
+    // Every user gets asked their name before anything else — used to
+    // personalize replies regardless of whether they ever register a
+    // wallet. Registration (see sendRegistrationLink) is a separate,
+    // explicitly opt-in step offered once, right after the name is given.
+    if (!user.preferredName) {
+      try {
+        await startNameCollection({ phoneNumber, user });
+        return;
+      } catch (error) {
+        // sendam-ai outage/misconfiguration mid-pitch: fall through to the
+        // normal greeting rather than leaving the user with no reply at all.
+        logger.warn(`sendam-ai flow/start failed for ${phoneNumber}: ${error.message}`);
+      }
+    }
+    await sendTextMessage(phoneNumber, personalizeGreeting(greetingReply, user.preferredName));
     return;
   }
 
@@ -226,4 +384,5 @@ module.exports = {
   processMessage,
   mapDecodedIntent,
   resolveGreetingReply,
+  personalizeGreeting,
 };

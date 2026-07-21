@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 // nothing here ever issues a real query.
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://user:pass@localhost:5432/test';
 
-const { mapDecodedIntent, resolveGreetingReply } = require('../src/whatsapp/assistant.service');
+const { mapDecodedIntent, resolveGreetingReply, personalizeGreeting } = require('../src/whatsapp/assistant.service');
 
 test('maps a valid SEND decode result, defaulting a missing asset to USDC', () => {
   const result = mapDecodedIntent({ intent: 'SEND', amount: '5000', asset: null, recipient: 'ada', confidence: 0.92 });
@@ -44,4 +44,16 @@ test('resolveGreetingReply returns null for non-GREETING intents', () => {
   assert.equal(resolveGreetingReply({ intent: 'SEND', reply: null }), null);
   assert.equal(resolveGreetingReply({ intent: 'UNKNOWN' }), null);
   assert.equal(resolveGreetingReply(null), null);
+});
+
+test('personalizeGreeting addresses the user by name and lowercases the join point', () => {
+  assert.equal(
+    personalizeGreeting('Hey! Good to hear from you.', 'Ada'),
+    'Ada, hey! Good to hear from you.'
+  );
+});
+
+test('personalizeGreeting returns the reply unchanged with no name or no reply', () => {
+  assert.equal(personalizeGreeting('Hey!', null), 'Hey!');
+  assert.equal(personalizeGreeting(null, 'Ada'), null);
 });

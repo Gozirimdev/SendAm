@@ -11,7 +11,14 @@ const isValidAmount = (amount) => {
   return Number.isFinite(parsed) && parsed > 0;
 };
 
+const isValidName = (name) => {
+  if (typeof name !== 'string') return false;
+  const trimmed = name.trim();
+  return trimmed.length >= 2 && trimmed.length <= 60;
+};
+
 module.exports = {
   isValidPhoneNumber,
   isValidAmount,
+  isValidName,
 };

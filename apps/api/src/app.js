@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 
 const webhookRoutes = require('./routes/webhook.routes');
 const walletRoutes = require('./routes/wallet.routes');
+const onboardingRoutes = require('./routes/onboarding.routes');
 const adminRoutes = require('./routes/admin.routes');
 const escrowRoutes = require('./escrow/escrow.routes');
 const complianceRoutes = require('./compliance/compliance.routes');
@@ -85,6 +86,11 @@ if (config.features.walletRestApi) {
 } else {
   logger.info('REST wallet API (/api/wallet) is disabled. Set ENABLE_WALLET_REST_API=true to enable.');
 }
+
+// Unlike /api/wallet, this is safe to expose unconditionally: identity here
+// is an unguessable, single-use, expiring token minted server-side (see
+// assistant.service.js::sendRegistrationLink), not a bare phone number.
+app.use('/api/onboarding', onboardingRoutes);
 
 app.use('/api/admin', adminRoutes);
 app.use('/api/escrow', escrowRoutes);
