@@ -95,6 +95,14 @@ module.exports = {
     signingSecret: process.env.PAYMASTER_SIGNING_SECRET,
     timeoutMs: Number(process.env.PAYMASTER_TIMEOUT_MS) || 15000,
   },
+  // sendam-settlement: private HTTP microservice — internal double-entry
+  // ledger, fee quoting, and treasury bookkeeping. Same x-sendam-signature
+  // HMAC contract as sendam-ai/sendam-paymaster.
+  settlement: {
+    baseUrl: process.env.SETTLEMENT_BASE_URL,
+    signingSecret: process.env.SETTLEMENT_SIGNING_SECRET,
+    timeoutMs: Number(process.env.SETTLEMENT_TIMEOUT_MS) || 15000,
+  },
   stellar: {
     network: process.env.STELLAR_NETWORK || 'testnet',
     horizonUrl: process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org',
