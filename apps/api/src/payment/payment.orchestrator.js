@@ -3,6 +3,7 @@ const { selectRail } = require('../blockchain/railSelector');
 const { createQuote } = require('../pricing/pricing.service');
 const { writeAuditLog } = require('../common/audit.service');
 const { enforceTransactionPolicy } = require('../compliance/compliance.service');
+const { ensureGas } = require('./gasTopup');
 const config = require('../config/env');
 const prisma = require('../common/prisma');
 const { withIdAlias } = require('../common/records');
@@ -77,6 +78,9 @@ const executePayment = async ({
 
   try {
     if (rail === 'lisk') {
+      // Self-custody has no relayer sponsoring gas — top up the sending
+      // wallet's native LSK first, or the transfer below simply reverts.
+      await ensureGas({ wallet, idempotencyKey: transaction.id });
       const result = await walletService.sendToken({
         wallet,
         chain: config.lisk.chainId,

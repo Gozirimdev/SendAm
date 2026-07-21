@@ -87,6 +87,16 @@ module.exports = {
     escrowContractAddress: process.env.LISK_ESCROW_CONTRACT_ADDRESS,
     usdcContractAddress: process.env.LISK_USDC_CONTRACT_ADDRESS,
     explorerBaseUrl: process.env.LISK_EXPLORER_BASE_URL,
+    // A funded, self-custodied Wallet row (see lisk.adapter.js) that pays
+    // gas top-ups planned by sendam-paymaster into user wallets.
+    gasWalletAddress: process.env.LISK_GAS_WALLET_ADDRESS,
+  },
+  // sendam-paymaster: private HTTP microservice that plans (never submits)
+  // gas/fee sponsorship. Same x-sendam-signature HMAC contract as sendam-ai.
+  paymaster: {
+    baseUrl: process.env.PAYMASTER_BASE_URL,
+    signingSecret: process.env.PAYMASTER_SIGNING_SECRET,
+    timeoutMs: Number(process.env.PAYMASTER_TIMEOUT_MS) || 15000,
   },
   // sendam-paymaster: private HTTP microservice that plans (never submits)
   // gas/fee sponsorship. Same x-sendam-signature HMAC contract as sendam-ai.
