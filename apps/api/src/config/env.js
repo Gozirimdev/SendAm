@@ -86,6 +86,14 @@ module.exports = {
     rpcUrl: process.env.LISK_RPC_URL,
     escrowContractAddress: process.env.LISK_ESCROW_CONTRACT_ADDRESS,
   },
+  // sendam-settlement: private HTTP microservice — internal double-entry
+  // ledger, fee quoting, and treasury bookkeeping. Same x-sendam-signature
+  // HMAC contract as sendam-ai/sendam-paymaster.
+  settlement: {
+    baseUrl: process.env.SETTLEMENT_BASE_URL,
+    signingSecret: process.env.SETTLEMENT_SIGNING_SECRET,
+    timeoutMs: Number(process.env.SETTLEMENT_TIMEOUT_MS) || 15000,
+  },
   chain: {
     network: process.env.CHAIN_NETWORK || 'testnet',
     rpcUrl: process.env.CHAIN_HORIZON_URL || 'https://rpc-testnet.chain.org',
