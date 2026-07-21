@@ -97,9 +97,10 @@ const startNameCollection = async ({ phoneNumber, user }) => {
 };
 
 // Mints a single-use, expiring link to the browser onboarding form
-// (apps/landing's /onboard page), which collects final confirmation + terms
-// acceptance and is what actually provisions the wallet on submit — see
-// apps/api/src/onboarding/onboarding.service.js::completeRegistration.
+// (apps/landing's /onboard page), which collects terms acceptance + a PIN
+// (and an optional passkey) and then, on an explicit "Create Wallet" action,
+// provisions the wallet — see
+// apps/api/src/onboarding/onboarding.service.js::saveSetup/provisionWallet.
 const sendRegistrationLink = async ({ phoneNumber, user }) => {
   const token = crypto.randomBytes(24).toString('hex');
   await prisma.user.update({
