@@ -18,19 +18,22 @@ const getOnboarding = async (req, res, next) => {
 
 // POST /api/onboarding/:token — the form's submit. Requires explicit terms
 // acceptance; the token (not a client-supplied id) is the only identity this
-// endpoint trusts.
+// endpoint trusts. name is optional — the user already gave it in chat
+// (see completeNameCollection), this just lets them tweak it while
+// confirming; a blank/unchanged field keeps whatever's already on file.
 const postOnboarding = async (req, res, next) => {
   try {
     const { name, acceptedTerms } = req.body || {};
+    const trimmedName = typeof name === 'string' ? name.trim() : '';
 
     if (acceptedTerms !== true) {
       return sendError(res, 'You must accept the Terms & Conditions to continue.');
     }
-    if (name !== undefined && !isValidName(name)) {
+    if (trimmedName && !isValidName(trimmedName)) {
       return sendError(res, 'Please enter a valid name (2-60 characters).');
     }
 
-    const result = await onboardingService.completeRegistration({ token: req.params.token, name });
+    const result = await onboardingService.completeRegistration({ token: req.params.token, name: trimmedName || undefined });
     if (!result) return sendError(res, 'This link is invalid or has expired.', 410);
 
     return sendSuccess(res, {

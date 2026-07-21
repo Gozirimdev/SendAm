@@ -112,10 +112,10 @@ export default function Onboard() {
         className="w-full max-w-md bg-white rounded-xl shadow-sm border border-gray-100 p-8"
       >
         <h1 className="text-2xl font-bold text-dark mb-2">Finish setting up SendAm</h1>
-        <p className="text-gray-500 mb-6">Confirm your name and accept the terms to activate your wallet.</p>
+        <p className="text-gray-500 mb-6">Accept the terms to activate your wallet — we already have your number and name from WhatsApp.</p>
 
         <label htmlFor="name" className="block text-sm font-medium text-dark mb-1">
-          What should we call you?
+          Display name
         </label>
         <input
           id="name"
@@ -123,10 +123,10 @@ export default function Onboard() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={60}
-          required
-          className="w-full border border-gray-200 rounded-lg px-4 py-2 mb-6 focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full border border-gray-200 rounded-lg px-4 py-2 mb-1 focus:outline-none focus:ring-2 focus:ring-primary"
           placeholder="e.g. Ada"
         />
+        <p className="text-xs text-gray-400 mb-6">This is what you told us on WhatsApp — change it here if you'd like.</p>
 
         <div className="border border-gray-200 rounded-lg p-4 mb-4 max-h-40 overflow-y-auto text-sm text-gray-500">
           <p className="font-medium text-dark mb-2">Terms &amp; Conditions (placeholder)</p>
