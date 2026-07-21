@@ -1,0 +1,16 @@
+name: Keep sendam-ai warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    name: Ping sendam-ai
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping intent-decoder
+        # No -f: any HTTP response (even 404) proves the instance is awake.
+        # Only a network-level failure (no response at all) should fail the step.
+        run: curl -sS --max-time 30 https://intent-decoder.onrender.com/ -o /dev/null
