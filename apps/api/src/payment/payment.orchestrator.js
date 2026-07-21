@@ -82,7 +82,7 @@ const executePayment = async ({
         chain: config.lisk.chainId,
         destination,
         amount,
-        tokenAddress: config.thirdweb.usdcContractAddress,
+        tokenAddress: config.lisk.usdcContractAddress,
       });
       transaction = await prisma.transaction.update({
         where: { id: transaction.id },
