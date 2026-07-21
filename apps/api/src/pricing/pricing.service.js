@@ -16,6 +16,32 @@ const getExchangeRate = async ({ sourceCurrency = 'NGN', targetCurrency = 'USDC'
   return response.data?.conversion_rate || null;
 };
 
+// Cached ~60s so a burst of "balance" messages doesn't hammer
+// exchangerate-api on every single one — no Redis in this project, so a
+// plain module-level cache is enough (see sendam-mvp-state memory note).
+const USDC_NGN_RATE_TTL_MS = 60 * 1000;
+let cachedUsdcNgnRate = null;
+
+const getUsdcToNairaRate = async () => {
+  const now = Date.now();
+  if (cachedUsdcNgnRate && now - cachedUsdcNgnRate.fetchedAt < USDC_NGN_RATE_TTL_MS) {
+    return cachedUsdcNgnRate.rate;
+  }
+  const rate = await getExchangeRate({ sourceCurrency: 'USDC', targetCurrency: 'NGN' });
+  cachedUsdcNgnRate = { rate, fetchedAt: now };
+  return rate;
+};
+
+// The wallet only ever holds/sends USDC, so a naira display value is just
+// USDC amount × the USDC/NGN rate — no separate crypto price feed needed.
+const toNaira = async (usdcAmount) => {
+  const amount = Number(usdcAmount);
+  if (!Number.isFinite(amount)) return null;
+  const rate = await getUsdcToNairaRate();
+  if (!rate) return null;
+  return amount * rate;
+};
+
 const createQuote = async ({ userId, sourceCurrency = 'NGN', targetCurrency = 'USDC', sourceAmount, route, provider }) => {
   const rate = await getExchangeRate({ sourceCurrency, targetCurrency });
   const numericAmount = Number(sourceAmount);
@@ -42,4 +68,5 @@ const createQuote = async ({ userId, sourceCurrency = 'NGN', targetCurrency = 'U
 module.exports = {
   createQuote,
   getExchangeRate,
+  toNaira,
 };
