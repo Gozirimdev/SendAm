@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const walletService = require('../wallet/wallet.service');
 const { executePayment } = require('../payment/payment.orchestrator');
+const { toNaira } = require('../pricing/pricing.service');
 const { enforceTransactionPolicy } = require('../compliance/compliance.service');
 const { verifyPin } = require('../compliance/pin.service');
 const { sendTextMessage } = require('../services/whatsapp.service');
@@ -294,7 +295,14 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
   if (normalized.includes('balance')) {
     const wallet = await walletService.createOrGetWallet({ user });
     const balance = await walletService.balance({ wallet });
-    await sendTextMessage(phoneNumber, `Your SendAm balance is ${balance.value || balance.displayValue || 'available in your managed wallet'}.`);
+    const usdcValue = balance.value || balance.displayValue;
+    if (!usdcValue) {
+      await sendTextMessage(phoneNumber, 'Your SendAm balance is available in your managed wallet.');
+      return;
+    }
+    const naira = await toNaira(usdcValue);
+    const nairaSuffix = naira != null ? ` (~₦${naira.toLocaleString('en-NG', { maximumFractionDigits: 2 })})` : '';
+    await sendTextMessage(phoneNumber, `You have ${usdcValue} USDC${nairaSuffix}.`);
     return;
   }
 
