@@ -7,20 +7,30 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  phoneNumber   String    @unique
-  whatsappName  String?
-  preferredName String?
-  walletId      String?   @unique
-  kycTier       Int       @default(0)
-  riskScore     Int       @default(0)
-  pinHash       String?
-  pinSetAt      DateTime?
-  pendingSend   Json?
-  pendingFlow   Json?
-  contactsJson  Json?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                         String    @id @default(cuid())
+  phoneNumber                String    @unique
+  whatsappName               String?
+  preferredName              String?
+  walletId                   String?   @unique
+  kycTier                    Int       @default(0)
+  riskScore                  Int       @default(0)
+  pinHash                    String?
+  pinSetAt                   DateTime?
+  pendingSend                Json?
+  pendingFlow                Json?
+  contactsJson               Json?
+  // Set once completeNameCollection asks "want to get started?" — cleared on
+  // reply (yes/no) or once stale. See handleGetStartedReply.
+  awaitingGetStartedUntil    DateTime?
+  // Single-use link to the browser onboarding form (apps/landing's /onboard
+  // page). Cleared once used or expired. See onboarding.service.js.
+  registrationToken          String?   @unique
+  registrationTokenExpiresAt DateTime?
+  // Set when the onboarding form is submitted with the terms checkbox
+  // checked — see onboarding.service.js::completeRegistration.
+  termsAcceptedAt            DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
   wallet        Wallet?
   aliases       Alias[]
@@ -113,21 +123,21 @@ model Alias {
 }
 
 model Escrow {
-  id              String    @id @default(cuid())
-  creatorId       String
-  counterpartyId  String?
-  arbiterId       String?
-  amount          String
-  asset           String    @default("USDC")
-  chain           String    @default("lisk")
-  contractAddress String?
+  id               String    @id @default(cuid())
+  creatorId        String
+  counterpartyId   String?
+  arbiterId        String?
+  amount           String
+  asset            String    @default("USDC")
+  chain            String    @default("lisk")
+  contractAddress  String?
   contractEscrowId String?
-  status          String    @default("draft")
-  releaseAfter    DateTime?
-  terms           String?
-  metadata        Json      @default("{}")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  status           String    @default("draft")
+  releaseAfter     DateTime?
+  terms            String?
+  metadata         Json      @default("{}")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   creator User   @relation("EscrowCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   arbiter Agent? @relation(fields: [arbiterId], references: [id])

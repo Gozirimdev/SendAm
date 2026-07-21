@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 import Home from './pages/Home.jsx';
+import Onboard from './pages/Onboard.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 export default function App() {
@@ -11,6 +12,7 @@ export default function App() {
       <main className="flex-grow w-full min-w-0">
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/onboard" element={<Onboard />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

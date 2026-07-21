@@ -68,6 +68,12 @@ module.exports = {
   // into a structured, closed-world intent (POST /decode). Requests are
   // HMAC-SHA256 signed over the raw JSON body; SENDAM_AI_SIGNING_SECRET must
   // be the exact same value as SERVICE_SIGNING_SECRET on the sendam-ai side.
+  landing: {
+    // apps/landing's deployed origin — used to build the /onboard link sent
+    // over WhatsApp once a user says yes to getting started. Matches the
+    // homepage field in the root package.json.
+    baseUrl: process.env.LANDING_BASE_URL || 'https://send-am-web.vercel.app',
+  },
   sendamAi: {
     baseUrl: process.env.SENDAM_AI_BASE_URL || 'https://intent-decoder.onrender.com',
     signingSecret: process.env.SENDAM_AI_SIGNING_SECRET,

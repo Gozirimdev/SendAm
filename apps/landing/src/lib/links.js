@@ -4,6 +4,7 @@
 const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || '';
 
 export const ADMIN_URL = import.meta.env.VITE_ADMIN_URL || 'http://localhost:3001';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
 export const GITHUB_URL = 'https://github.com/Gozirimdev/SendAm';
 export const CHAIN_URL = 'https://chain.org';
 
