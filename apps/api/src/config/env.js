@@ -98,13 +98,6 @@ module.exports = {
     signingSecret: process.env.PAYMASTER_SIGNING_SECRET,
     timeoutMs: Number(process.env.PAYMASTER_TIMEOUT_MS) || 15000,
   },
-  // sendam-paymaster: private HTTP microservice that plans (never submits)
-  // gas/fee sponsorship. Same x-sendam-signature HMAC contract as sendam-ai.
-  paymaster: {
-    baseUrl: process.env.PAYMASTER_BASE_URL,
-    signingSecret: process.env.PAYMASTER_SIGNING_SECRET,
-    timeoutMs: Number(process.env.PAYMASTER_TIMEOUT_MS) || 15000,
-  },
   // sendam-settlement: private HTTP microservice — internal double-entry
   // ledger, fee quoting, and treasury bookkeeping. Same x-sendam-signature
   // HMAC contract as sendam-ai/sendam-paymaster.
@@ -112,6 +105,9 @@ module.exports = {
     baseUrl: process.env.SETTLEMENT_BASE_URL,
     signingSecret: process.env.SETTLEMENT_SIGNING_SECRET,
     timeoutMs: Number(process.env.SETTLEMENT_TIMEOUT_MS) || 15000,
+    // The ledger account fee revenue from executed on-chain sends is
+    // recorded against, purely for internal reconciliation — not a real user.
+    treasuryUserId: process.env.SETTLEMENT_TREASURY_USER_ID || 'treasury',
   },
   stellar: {
     network: process.env.STELLAR_NETWORK || 'testnet',
