@@ -88,6 +88,13 @@ module.exports = {
     usdcContractAddress: process.env.LISK_USDC_CONTRACT_ADDRESS,
     explorerBaseUrl: process.env.LISK_EXPLORER_BASE_URL,
   },
+  // sendam-paymaster: private HTTP microservice that plans (never submits)
+  // gas/fee sponsorship. Same x-sendam-signature HMAC contract as sendam-ai.
+  paymaster: {
+    baseUrl: process.env.PAYMASTER_BASE_URL,
+    signingSecret: process.env.PAYMASTER_SIGNING_SECRET,
+    timeoutMs: Number(process.env.PAYMASTER_TIMEOUT_MS) || 15000,
+  },
   chain: {
     network: process.env.CHAIN_NETWORK || 'testnet',
     rpcUrl: process.env.CHAIN_HORIZON_URL || 'https://rpc-testnet.chain.org',
