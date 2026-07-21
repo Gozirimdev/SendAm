@@ -38,7 +38,7 @@ const completeRegistration = async ({ token, name }) => {
 
   await sendTextMessage(
     updated.phoneNumber,
-    `You're all set${preferredName ? `, ${preferredName}` : ''}! Your wallet's ready — send "balance" to check your funds, or just tell me who to send money to.`
+    `You're all set${preferredName ? `, ${preferredName}` : ''}! Your wallet's ready:\n${wallet.address}\n\nSend "balance" to check your funds, "receive" to get this address again, or just tell me who to send money to.`
   );
 
   return { user: updated, wallet };
