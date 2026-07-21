@@ -1,12 +1,14 @@
 const config = require('../config/env');
+const lisk = require('./lisk.adapter');
 const thirdweb = require('./thirdweb.adapter');
 const openfort = require('./openfort.adapter');
 const { writeAuditLog } = require('../common/audit.service');
 const prisma = require('../common/prisma');
 const { withIdAlias, withIdAliases } = require('../common/records');
 
-const providerName = () => config.walletProvider || 'thirdweb';
-const provider = () => (providerName() === 'openfort' ? openfort : thirdweb);
+const providerName = () => config.walletProvider || 'lisk';
+const providers = { lisk, thirdweb, openfort };
+const provider = () => providers[providerName()] || lisk;
 
 const walletLabelForPhone = (phoneNumber) => `sendam-${String(phoneNumber).replace(/\D/g, '')}`;
 
@@ -33,9 +35,10 @@ const createOrGetWallet = async ({ user, phoneNumber }) => {
       providerWalletId: managedWallet.providerWalletId,
       address: managedWallet.address,
       publicKey: managedWallet.address,
+      encryptedSecretKey: managedWallet.encryptedSecretKey,
       primaryChain: 'lisk',
       supportedChains: ['lisk', 'stellar'],
-      network: 'managed',
+      network: managedWallet.encryptedSecretKey ? 'self-custody' : 'managed',
     },
   });
 

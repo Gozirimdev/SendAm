@@ -6,6 +6,9 @@ const assert = require('node:assert/strict');
 // crypto.test.js uses for ENCRYPTION_KEY. mapDecodedIntent is a pure function;
 // nothing here ever issues a real query.
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://user:pass@localhost:5432/test';
+// wallet.service.js now requires lisk.adapter.js -> crypto.service.js, which
+// also throws at require-time if ENCRYPTION_KEY is unset/wrong length.
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || require('node:crypto').randomBytes(32).toString('hex');
 
 const { mapDecodedIntent, resolveGreetingReply, personalizeGreeting } = require('../src/whatsapp/assistant.service');
 

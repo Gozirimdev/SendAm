@@ -52,7 +52,7 @@ module.exports = {
     r2AccessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID,
     r2SecretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
   },
-  walletProvider: process.env.WALLET_PROVIDER || 'thirdweb',
+  walletProvider: process.env.WALLET_PROVIDER || 'lisk',
   thirdweb: {
     engineUrl: process.env.THIRDWEB_ENGINE_URL,
     accessToken: process.env.THIRDWEB_ACCESS_TOKEN,
@@ -85,6 +85,8 @@ module.exports = {
     chainId: process.env.LISK_CHAIN_ID || 'lisk',
     rpcUrl: process.env.LISK_RPC_URL,
     escrowContractAddress: process.env.LISK_ESCROW_CONTRACT_ADDRESS,
+    usdcContractAddress: process.env.LISK_USDC_CONTRACT_ADDRESS,
+    explorerBaseUrl: process.env.LISK_EXPLORER_BASE_URL,
   },
   stellar: {
     network: process.env.STELLAR_NETWORK || 'testnet',
