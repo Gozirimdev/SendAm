@@ -184,7 +184,7 @@ const getSystemHealth = async (_req, res, next) => {
       queues: process.env.REDIS_URL || process.env.UPSTASH_REDIS_URL ? 'redis-configured' : 'inline-dev-mode',
       primarySettlement: 'lisk',
       corridorRail: 'stellar',
-      walletProvider: process.env.WALLET_PROVIDER || 'thirdweb',
+      walletProvider: 'lisk',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
