@@ -294,16 +294,24 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
   }
 
   if (normalized.includes('balance')) {
-    const wallet = await walletService.createOrGetWallet({ user });
-    const balance = await walletService.balance({ wallet });
-    const usdcValue = balance.value || balance.displayValue;
-    if (!usdcValue) {
-      await sendTextMessage(phoneNumber, 'Your SendAm balance is available in your managed wallet.');
-      return;
+    try {
+      const wallet = await walletService.createOrGetWallet({ user });
+      const balance = await walletService.balance({ wallet });
+      const usdcValue = balance.value || balance.displayValue;
+      if (!usdcValue) {
+        await sendTextMessage(phoneNumber, 'Your SendAm balance is available in your managed wallet.');
+        return;
+      }
+      const naira = await toNaira(usdcValue);
+      const nairaSuffix = naira != null ? ` (~₦${naira.toLocaleString('en-NG', { maximumFractionDigits: 2 })})` : '';
+      await sendTextMessage(phoneNumber, `You have ${usdcValue} USDC${nairaSuffix}.`);
+    } catch (error) {
+      // A chain RPC outage/misconfiguration must not leave the user with no
+      // reply at all (this is the first place a real Lisk network call
+      // happens — wallet creation itself never touches the RPC).
+      logger.error(`Balance lookup failed for ${phoneNumber}: ${error.message}`);
+      await sendTextMessage(phoneNumber, "Couldn't fetch your balance right now — please try again shortly.");
     }
-    const naira = await toNaira(usdcValue);
-    const nairaSuffix = naira != null ? ` (~₦${naira.toLocaleString('en-NG', { maximumFractionDigits: 2 })})` : '';
-    await sendTextMessage(phoneNumber, `You have ${usdcValue} USDC${nairaSuffix}.`);
     return;
   }
 
