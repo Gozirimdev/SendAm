@@ -17,8 +17,14 @@ const isValidName = (name) => {
   return trimmed.length >= 2 && trimmed.length <= 60;
 };
 
+// Mirrors the rule enforced in compliance/pin.service.js#hashPin — checking
+// it here first lets callers return a clean validation error instead of
+// hitting hashPin's thrown Error.
+const isValidPin = (pin) => /^\d{4,6}$/.test(String(pin));
+
 module.exports = {
   isValidPhoneNumber,
   isValidAmount,
   isValidName,
+  isValidPin,
 };
