@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { isValidPhoneNumber, isValidAmount, isValidName } = require('../src/utils/validators');
+const { isValidPhoneNumber, isValidAmount, isValidName, isValidPin } = require('../src/utils/validators');
 
 test('isValidPhoneNumber accepts plausible numbers', () => {
   assert.equal(isValidPhoneNumber('+2348000000000'), true);
@@ -42,4 +42,18 @@ test('isValidName rejects too short, too long, empty, or non-string input', () =
   assert.equal(isValidName('a'.repeat(61)), false);
   assert.equal(isValidName(undefined), false);
   assert.equal(isValidName(123), false);
+});
+
+test('isValidPin accepts 4 to 6 digit numeric PINs', () => {
+  assert.equal(isValidPin('1234'), true);
+  assert.equal(isValidPin('123456'), true);
+  assert.equal(isValidPin(1234), true); // coerced to string
+});
+
+test('isValidPin rejects wrong length, non-numeric, or empty input', () => {
+  assert.equal(isValidPin('123'), false);
+  assert.equal(isValidPin('1234567'), false);
+  assert.equal(isValidPin('12a4'), false);
+  assert.equal(isValidPin(''), false);
+  assert.equal(isValidPin(undefined), false);
 });

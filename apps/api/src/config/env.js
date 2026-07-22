@@ -74,6 +74,16 @@ module.exports = {
     // homepage field in the root package.json.
     baseUrl: process.env.LANDING_BASE_URL || 'https://send-am-web.vercel.app',
   },
+  // Passkey (WebAuthn) enrollment during onboarding. rpID must be the exact
+  // domain (no scheme/port) and origin must be the exact scheme+domain+port
+  // apps/landing is actually served from — a mismatch hard-fails every
+  // ceremony, browser-side, with no server-side workaround. Defaults assume
+  // apps/landing's own deployed origin; override for local dev (rpID=localhost).
+  webauthn: {
+    rpName: 'SendAm',
+    rpId: process.env.WEBAUTHN_RP_ID || 'send-am-web.vercel.app',
+    origin: process.env.WEBAUTHN_ORIGIN || process.env.LANDING_BASE_URL || 'https://send-am-web.vercel.app',
+  },
   sendamAi: {
     baseUrl: process.env.SENDAM_AI_BASE_URL || 'https://intent-decoder.onrender.com',
     signingSecret: process.env.SENDAM_AI_SIGNING_SECRET,
