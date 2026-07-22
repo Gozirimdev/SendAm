@@ -6,7 +6,11 @@ const { writeAuditLog } = require('../common/audit.service');
 const prisma = require('../common/prisma');
 const { withIdAlias, withIdAliases } = require('../common/records');
 
-const providerName = () => config.walletProvider || 'lisk';
+// Thirdweb Engine was dropped for cost (2026-07-21): wallets are self-custody
+// on Lisk now, so this is hardcoded rather than driven by WALLET_PROVIDER —
+// a stray/stale env var on any deploy target must not be able to resurrect
+// Thirdweb wallet creation.
+const providerName = () => 'lisk';
 const providers = { lisk, thirdweb, openfort };
 const provider = () => providers[providerName()] || lisk;
 
