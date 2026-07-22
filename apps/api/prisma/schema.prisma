@@ -27,20 +27,45 @@ model User {
   registrationToken          String?   @unique
   registrationTokenExpiresAt DateTime?
   // Set when the onboarding form is submitted with the terms checkbox
-  // checked — see onboarding.service.js::completeRegistration.
+  // checked — see onboarding.service.js::saveSetup.
   termsAcceptedAt            DateTime?
+  // Holds the random challenge issued by webauthn.service.js#generateRegistrationOptions
+  // between the two round trips of a passkey registration ceremony (server
+  // issues it, browser signs it, server verifies it against this value).
+  // Cleared on verification success or failure — never reused.
+  pendingWebauthnChallenge   String?
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
 
-  wallet        Wallet?
-  aliases       Alias[]
-  contacts      Contact[]      @relation("ContactOwner")
-  transactions  Transaction[]
-  kycProfile    KycProfile?
-  voiceCommands VoiceCommand[]
-  notifications Notification[]
-  quotes        Quote[]
-  escrows       Escrow[]       @relation("EscrowCreator")
+  wallet              Wallet?
+  aliases             Alias[]
+  contacts            Contact[]            @relation("ContactOwner")
+  transactions        Transaction[]
+  kycProfile          KycProfile?
+  voiceCommands       VoiceCommand[]
+  notifications       Notification[]
+  quotes              Quote[]
+  escrows             Escrow[]             @relation("EscrowCreator")
+  webauthnCredentials WebauthnCredential[]
+}
+
+// A registered passkey (WebAuthn credential). One-to-many: a user may
+// enroll more than one device/authenticator over time, even though the
+// onboarding flow only ever registers one at signup.
+model WebauthnCredential {
+  id           String   @id @default(cuid())
+  userId       String
+  credentialId String   @unique
+  publicKey    Bytes
+  counter      BigInt   @default(0)
+  deviceType   String?
+  backedUp     Boolean  @default(false)
+  transports   String[] @default([])
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Wallet {
