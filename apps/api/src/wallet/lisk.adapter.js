@@ -76,13 +76,41 @@ const getBalance = async ({ address, tokenAddress = config.lisk.usdcContractAddr
   return { value: ethers.formatUnits(raw, decimals), raw: raw.toString(), decimals };
 };
 
+// Raw JSON-RPC POST that, unlike ethers, surfaces the HTTP status and a
+// snippet of a non-JSON body. ethers collapses "the endpoint returned an HTML
+// 429/502/challenge page" into an opaque "response body is not valid JSON",
+// which hides exactly the detail needed to tell a rate-limited/blocked host IP
+// from a wrong RPC URL. This does not decode results — it only reports what the
+// endpoint actually sent back.
+const rawRpcProbe = async (method, params = []) => {
+  const response = await fetch(config.lisk.rpcUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  const text = await response.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch (_) {
+    const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 200);
+    throw new Error(
+      `HTTP ${response.status} returned non-JSON body: "${snippet}" — endpoint is not serving JSON-RPC (rate-limit/proxy/challenge page, or wrong LISK_RPC_URL)`
+    );
+  }
+  if (json.error) throw new Error(`RPC error ${json.error.code}: ${json.error.message}`);
+  return json.result;
+};
+
 // Diagnostic used by the /health/lisk route. Walks the exact call path
-// getBalance() takes — env presence, RPC reachability, contract existence, a
-// real balanceOf — and reports which step fails, so a locked-out operator can
-// tell "envs missing on the deploy host" from "RPC is timing out" over HTTP
-// without shell access. Never throws; always resolves to a status object.
+// getBalance() takes — env presence, real RPC connectivity, contract existence,
+// a real balanceOf — and reports which step fails, so a locked-out operator can
+// tell "envs missing on the deploy host" from "RPC is rate-limited/blocked"
+// over HTTP without shell access. Never throws; always resolves to a status
+// object. `rpcHost` is echoed so a wrong deployed LISK_RPC_URL is visible.
 const checkHealth = async () => {
-  const result = { ok: false, envs: null, rpc: null, contract: null, balanceRead: null };
+  const result = { ok: false, envs: null, rpcHost: null, rpc: null, contract: null, balanceRead: null };
 
   result.envs = Boolean(config.lisk.rpcUrl) && Boolean(config.lisk.usdcContractAddress);
   if (!config.lisk.rpcUrl) result.error = 'LISK_RPC_URL is not set';
@@ -90,22 +118,32 @@ const checkHealth = async () => {
   if (!result.envs) return result;
 
   try {
-    const network = await withRetry(() => provider().getNetwork());
-    result.rpc = `chainId ${network.chainId}`;
+    result.rpcHost = new URL(config.lisk.rpcUrl).host;
+  } catch (_) {
+    result.error = `LISK_RPC_URL is not a valid URL: "${String(config.lisk.rpcUrl).slice(0, 80)}"`;
+    return result;
+  }
+
+  // A genuine RPC round-trip (eth_chainId). Unlike ethers' getNetwork(), which
+  // the staticNetwork pin short-circuits without touching the network, this
+  // actually exercises connectivity and surfaces a non-JSON body verbatim.
+  try {
+    const chainIdHex = await withRetry(() => rawRpcProbe('eth_chainId'));
+    result.rpc = `chainId ${Number(chainIdHex)}`;
   } catch (error) {
-    result.error = `RPC unreachable: ${error.shortMessage || error.message}`;
+    result.error = `RPC unreachable: ${error.message}`;
     return result;
   }
 
   try {
-    const code = await withRetry(() => provider().getCode(config.lisk.usdcContractAddress));
+    const code = await withRetry(() => rawRpcProbe('eth_getCode', [config.lisk.usdcContractAddress, 'latest']));
     if (!code || code === '0x') {
       result.error = `no contract code at ${config.lisk.usdcContractAddress} on this chain`;
       return result;
     }
     result.contract = 'ok';
   } catch (error) {
-    result.error = `contract check failed: ${error.shortMessage || error.message}`;
+    result.error = `contract check failed: ${error.message}`;
     return result;
   }
 
