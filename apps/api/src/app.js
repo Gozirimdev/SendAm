@@ -18,6 +18,7 @@ const PostgresRateStore = require('./middlewares/postgresRateStore');
 const config = require('./config/env');
 const logger = require('./utils/logger');
 const prisma = require('./common/prisma');
+const liskAdapter = require('./wallet/lisk.adapter');
 
 const app = express();
 
@@ -70,6 +71,16 @@ app.get('/health', async (req, res) => {
   } catch (error) {
     res.status(503).json({ status: 'degraded', db: 'disconnected', uptime: process.uptime() });
   }
+});
+
+// Lisk RPC health, for diagnosing balance-lookup failures without shell access
+// to the deploy host. Reports which step of the balance path fails — missing
+// envs vs. an unreachable/timing-out RPC vs. a bad contract address — so an
+// operator locked out of the backend can tell them apart over HTTP. No secrets
+// are returned. 200 when the full path works, 503 otherwise.
+app.get('/health/lisk', async (req, res) => {
+  const result = await liskAdapter.checkHealth();
+  res.status(result.ok ? 200 : 503).json(result);
 });
 
 // Routes

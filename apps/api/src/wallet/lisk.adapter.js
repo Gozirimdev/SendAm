@@ -10,13 +10,45 @@ const ERC20_ABI = [
   'function decimals() view returns (uint8)',
 ];
 
+// Lisk chain ids: Sepolia testnet = 4202, mainnet = 1135. LISK_CHAIN_ID
+// defaults to the string 'lisk' (see config/env.js), which is not numeric, so
+// fall back to the testnet id rather than let ethers auto-detect.
+const LISK_DEFAULT_CHAIN_ID = 4202;
+const resolvedChainId = () => Number(config.lisk.chainId) || LISK_DEFAULT_CHAIN_ID;
+
 let cachedProvider;
 const provider = () => {
   if (!config.lisk.rpcUrl) {
     throw new Error('Lisk RPC is not configured. Set LISK_RPC_URL.');
   }
-  if (!cachedProvider) cachedProvider = new ethers.JsonRpcProvider(config.lisk.rpcUrl);
+  if (!cachedProvider) {
+    // staticNetwork pins the chain id so ethers skips the eth_chainId
+    // network-detection round-trip it otherwise fires on the first call.
+    // That detection call is the first RPC touch in a balance lookup (wallet
+    // creation never hits the RPC), and against the public Lisk endpoint it
+    // intermittently times out on cold start — surfacing to the user as
+    // "Couldn't fetch your balance right now". Pinning removes that hop.
+    cachedProvider = new ethers.JsonRpcProvider(config.lisk.rpcUrl, undefined, {
+      staticNetwork: ethers.Network.from(resolvedChainId()),
+    });
+  }
   return cachedProvider;
+};
+
+// One retry on transient RPC failures (timeouts, dropped connections). The
+// public Lisk endpoint occasionally drops a cold request that succeeds on an
+// immediate retry; a single retry turns that flake into a non-event without
+// masking a genuinely-down RPC (which fails both attempts).
+const withRetry = async (fn, attempts = 2) => {
+  let lastError;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 };
 
 // Self-custody: the wallet's private key never leaves this process. It's
@@ -38,8 +70,54 @@ const getBalance = async ({ address, tokenAddress = config.lisk.usdcContractAddr
     throw new Error('Token contract address is required to read a balance.');
   }
   const token = new ethers.Contract(tokenAddress, ERC20_ABI, provider());
-  const [raw, decimals] = await Promise.all([token.balanceOf(address), token.decimals()]);
+  const [raw, decimals] = await withRetry(() =>
+    Promise.all([token.balanceOf(address), token.decimals()])
+  );
   return { value: ethers.formatUnits(raw, decimals), raw: raw.toString(), decimals };
+};
+
+// Diagnostic used by the /health/lisk route. Walks the exact call path
+// getBalance() takes — env presence, RPC reachability, contract existence, a
+// real balanceOf — and reports which step fails, so a locked-out operator can
+// tell "envs missing on the deploy host" from "RPC is timing out" over HTTP
+// without shell access. Never throws; always resolves to a status object.
+const checkHealth = async () => {
+  const result = { ok: false, envs: null, rpc: null, contract: null, balanceRead: null };
+
+  result.envs = Boolean(config.lisk.rpcUrl) && Boolean(config.lisk.usdcContractAddress);
+  if (!config.lisk.rpcUrl) result.error = 'LISK_RPC_URL is not set';
+  else if (!config.lisk.usdcContractAddress) result.error = 'LISK_USDC_CONTRACT_ADDRESS is not set';
+  if (!result.envs) return result;
+
+  try {
+    const network = await withRetry(() => provider().getNetwork());
+    result.rpc = `chainId ${network.chainId}`;
+  } catch (error) {
+    result.error = `RPC unreachable: ${error.shortMessage || error.message}`;
+    return result;
+  }
+
+  try {
+    const code = await withRetry(() => provider().getCode(config.lisk.usdcContractAddress));
+    if (!code || code === '0x') {
+      result.error = `no contract code at ${config.lisk.usdcContractAddress} on this chain`;
+      return result;
+    }
+    result.contract = 'ok';
+  } catch (error) {
+    result.error = `contract check failed: ${error.shortMessage || error.message}`;
+    return result;
+  }
+
+  try {
+    // Probe with a throwaway address — this only exercises the read path.
+    await getBalance({ address: '0x0000000000000000000000000000000000000001' });
+    result.balanceRead = 'ok';
+    result.ok = true;
+  } catch (error) {
+    result.error = `balance read failed: ${error.shortMessage || error.message}`;
+  }
+  return result;
 };
 
 // Native LSK balance, in wei — used by the payment orchestrator to decide
@@ -89,4 +167,5 @@ module.exports = {
   getNativeBalance,
   sendToken,
   sendNative,
+  checkHealth,
 };
