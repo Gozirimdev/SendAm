@@ -127,6 +127,10 @@ module.exports = {
     coinGeckoBaseUrl: process.env.COINGECKO_BASE_URL || 'https://api.coingecko.com/api/v3',
     coinGeckoApiKey: process.env.COINGECKO_API_KEY,
     exchangeRateApiKey: process.env.EXCHANGERATE_API_KEY,
+    // Fixed USD->NGN rate used to display naira values until a live FX/price
+    // feed is wired up (see pricing.service.js::getUsdToNairaRate). Overridable
+    // so the peg can be bumped without a deploy.
+    usdNgnFixedRate: Number(process.env.USD_NGN_FIXED_RATE) || 1390,
   },
   ramps: {
     yellowCard: {

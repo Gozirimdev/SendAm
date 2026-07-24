@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const walletService = require('../wallet/wallet.service');
 const { executePayment } = require('../payment/payment.orchestrator');
-const { toNaira } = require('../pricing/pricing.service');
+const { tokenToNaira } = require('../pricing/pricing.service');
 const { enforceTransactionPolicy } = require('../compliance/compliance.service');
 const { verifyPin } = require('../compliance/pin.service');
 const { sendTextMessage } = require('../services/whatsapp.service');
@@ -52,6 +52,37 @@ const mapDecodedIntent = (decoded) => {
     asset: (decoded.asset || 'USDC').toUpperCase(),
     recipient: decoded.recipient,
   };
+};
+
+// Local parse for "send <amount> [ASSET] to <recipient>" so the send flow keeps
+// working even when sendam-ai is down. Produces the same intent shape as
+// mapDecodedIntent; the AI decode remains the fallback for free-form phrasing.
+const SEND_COMMAND_RE = /^send\s+([\d,]+(?:\.\d+)?)\s*([a-zA-Z]{2,6})?\s+to\s+(.+)$/i;
+const parseSendCommand = (text) => {
+  const match = String(text || '').trim().match(SEND_COMMAND_RE);
+  if (!match) return null;
+  const rawAmount = match[1].replace(/,/g, '');
+  const amount = Number(rawAmount);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const recipient = match[3].trim();
+  if (!recipient) return null;
+  return { amount: rawAmount, asset: (match[2] || 'USDC').toUpperCase(), recipient };
+};
+
+// Renders a wallet's token balances into a WhatsApp-friendly message. Pure (no
+// network/WhatsApp I/O) so it can be unit-tested directly. `entries` is
+// [{ symbol, amount, naira }] where naira is a number or null.
+const formatWalletBalance = (entries) => {
+  if (!entries.length) return 'Your SendAm wallet is empty. Add funds to get started.';
+  const fmtAmount = (a) => Number(a).toLocaleString('en-NG', { maximumFractionDigits: 6 });
+  const fmtNaira = (n) => `₦${Number(n).toLocaleString('en-NG', { maximumFractionDigits: 2 })}`;
+  const lines = entries.map((e) => {
+    const naira = e.naira != null ? ` — ~${fmtNaira(e.naira)}` : '';
+    return `• ${fmtAmount(e.amount)} ${e.symbol}${naira}`;
+  });
+  const total = entries.reduce((sum, e) => sum + (e.naira || 0), 0);
+  const totalLine = total > 0 ? `\nTotal: ~${fmtNaira(total)}` : '';
+  return `Your SendAm wallet\n${lines.join('\n')}${totalLine}`;
 };
 
 // sendam-ai reads the feeling behind the user's own words and opens in a
@@ -289,22 +320,32 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
   // one fixed line every time. 'help'/'menu' stay static: they're an
   // explicit request for the command list, not a greeting.
   if (['help', 'menu'].includes(normalized)) {
-    await sendTextMessage(phoneNumber, 'SendAm can help with send money, receive money, balance, escrow, nearby cash-out, contacts, transaction history, and receipts.');
+    await sendTextMessage(phoneNumber, 'SendAm can help with send money, receive money, balance, my address, escrow, nearby cash-out, contacts, transaction history, and receipts.');
     return;
   }
 
   if (normalized.includes('balance')) {
     try {
       const wallet = await walletService.createOrGetWallet({ user });
-      const balance = await walletService.balance({ wallet });
-      const usdcValue = balance.value || balance.displayValue;
-      if (!usdcValue) {
-        await sendTextMessage(phoneNumber, 'Your SendAm balance is available in your managed wallet.');
-        return;
+      let entries;
+      try {
+        const tokens = await walletService.tokenBalances({ wallet });
+        entries = await Promise.all(tokens.map(async (t) => ({
+          symbol: t.symbol,
+          amount: t.amount,
+          naira: await tokenToNaira({ amount: t.amount, usdPrice: t.usdPrice, symbol: t.symbol }),
+        })));
+      } catch (explorerError) {
+        // The explorer being down/misconfigured must not cost the user their
+        // balance — fall back to the direct on-chain USDC read.
+        logger.warn(`Token listing failed for ${phoneNumber}, falling back to USDC read: ${explorerError.message}`);
+        const usdc = await walletService.balance({ wallet });
+        const value = usdc.value || usdc.displayValue;
+        entries = value
+          ? [{ symbol: 'USDC', amount: value, naira: await tokenToNaira({ amount: value, symbol: 'USDC' }) }]
+          : [];
       }
-      const naira = await toNaira(usdcValue);
-      const nairaSuffix = naira != null ? ` (~₦${naira.toLocaleString('en-NG', { maximumFractionDigits: 2 })})` : '';
-      await sendTextMessage(phoneNumber, `You have ${usdcValue} USDC${nairaSuffix}.`);
+      await sendTextMessage(phoneNumber, formatWalletBalance(entries));
     } catch (error) {
       // A chain RPC outage/misconfiguration must not leave the user with no
       // reply at all (this is the first place a real Lisk network call
@@ -315,9 +356,19 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
     return;
   }
 
+  // Checked before `receive` so "receive address" resolves to the address reply.
+  if (normalized.includes('address') || normalized === 'wallet') {
+    const wallet = await walletService.createOrGetWallet({ user });
+    const addr = wallet.address || wallet.publicKey;
+    const link = config.lisk.explorerBaseUrl ? `\nView on explorer: ${config.lisk.explorerBaseUrl}/address/${addr}` : '';
+    await sendTextMessage(phoneNumber, `Your SendAm wallet address:\n${addr}${link}`);
+    return;
+  }
+
   if (normalized.includes('receive')) {
     const wallet = await walletService.createOrGetWallet({ user });
-    await sendTextMessage(phoneNumber, `Share your phone number to receive money on SendAm. Wallet reference: ${wallet.address || wallet.publicKey}`);
+    const addr = wallet.address || wallet.publicKey;
+    await sendTextMessage(phoneNumber, `To receive money on SendAm, share your phone number, or give the sender your wallet address:\n${addr}`);
     return;
   }
 
@@ -339,6 +390,14 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
 
   if (normalized.includes('escrow')) {
     await sendTextMessage(phoneNumber, 'Escrow is available for protected payments. Tell me the amount, recipient, and release terms.');
+    return;
+  }
+
+  // Explicit "send <amount> to <recipient>" — handled locally so it works even
+  // when sendam-ai is unavailable. Free-form phrasing still falls to decode below.
+  const localSend = parseSendCommand(text);
+  if (localSend) {
+    await requestConfirmation({ phoneNumber, user, intent: localSend });
     return;
   }
 
@@ -400,6 +459,8 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
 module.exports = {
   processMessage,
   mapDecodedIntent,
+  parseSendCommand,
+  formatWalletBalance,
   resolveGreetingReply,
   personalizeGreeting,
 };
