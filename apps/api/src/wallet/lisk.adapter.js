@@ -165,6 +165,83 @@ const getNativeBalance = async ({ address }) => {
   return { value: ethers.formatEther(raw), raw: raw.toString() };
 };
 
+// GETs JSON from the Blockscout explorer, guarding against a non-JSON body the
+// same way rawRpcProbe does (a misconfigured LISK_EXPLORER_BASE_URL, or a
+// rate-limit/proxy page, would otherwise blow up with an opaque parse error).
+const explorerGet = async (path) => {
+  if (!config.lisk.explorerBaseUrl) {
+    throw new Error('Lisk explorer is not configured. Set LISK_EXPLORER_BASE_URL.');
+  }
+  const url = `${config.lisk.explorerBaseUrl.replace(/\/+$/, '')}${path}`;
+  const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 120);
+    throw new Error(`explorer returned HTTP ${response.status} non-JSON body: "${snippet}"`);
+  }
+};
+
+// Every token the wallet holds, via the Blockscout v2 API — used by the "balance"
+// command so users see all their holdings, not just USDC. Returns native LSK
+// first, then non-zero ERC-20s sorted by USD value, capped at `limit`. Each entry
+// carries `usdPrice` (from the explorer's exchange_rate) when known, so the
+// caller can render a naira figure. Throws on explorer failure so the caller can
+// fall back to the single-USDC on-chain read rather than show nothing.
+// True when an amount is large enough to show at the 6-dp display precision —
+// filters out dust (e.g. 1000 wei of an 18-decimal LP token = 1e-15) that would
+// otherwise render as a meaningless "0 TOKEN" line.
+const hasVisibleAmount = (amount) => Number(Number(amount).toFixed(6)) !== 0;
+
+const getTokenBalances = async ({ address, limit = 10 }) => {
+  const [tokenRows, account] = await withRetry(() =>
+    Promise.all([
+      explorerGet(`/api/v2/addresses/${address}/token-balances`),
+      explorerGet(`/api/v2/addresses/${address}`),
+    ])
+  );
+
+  const tokens = (Array.isArray(tokenRows) ? tokenRows : [])
+    .filter((row) => row?.token?.type === 'ERC-20')
+    .filter((row) => row?.token?.reputation !== 'scam' && !row?.token?.is_scam)
+    .filter((row) => row?.value && row.value !== '0')
+    .map((row) => {
+      const decimals = Number(row.token.decimals) || 18;
+      const usdPrice = Number(row.token.exchange_rate) || null;
+      const amount = ethers.formatUnits(row.value, decimals);
+      return {
+        symbol: row.token.symbol || 'TOKEN',
+        name: row.token.name || row.token.symbol || 'Token',
+        address: row.token.address_hash || row.token.address,
+        decimals,
+        amount,
+        raw: String(row.value),
+        usdPrice,
+        native: false,
+      };
+    })
+    .filter((t) => hasVisibleAmount(t.amount))
+    .sort((a, b) => Number(b.amount) * (b.usdPrice || 0) - Number(a.amount) * (a.usdPrice || 0))
+    .slice(0, limit);
+
+  const nativeRaw = account?.coin_balance;
+  const balances = [];
+  if (nativeRaw && nativeRaw !== '0' && hasVisibleAmount(ethers.formatEther(nativeRaw))) {
+    balances.push({
+      symbol: 'LSK',
+      name: 'Lisk',
+      address: null,
+      decimals: 18,
+      amount: ethers.formatEther(nativeRaw),
+      raw: String(nativeRaw),
+      usdPrice: Number(account.exchange_rate) || null,
+      native: true,
+    });
+  }
+  return balances.concat(tokens);
+};
+
 const signerFor = async (fromAddress) => {
   const wallet = await prisma.wallet.findFirst({ where: { address: fromAddress } });
   if (!wallet || !wallet.encryptedSecretKey) {
@@ -203,6 +280,7 @@ module.exports = {
   createManagedWallet,
   getBalance,
   getNativeBalance,
+  getTokenBalances,
   sendToken,
   sendNative,
   checkHealth,

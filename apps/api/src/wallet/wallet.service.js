@@ -71,6 +71,12 @@ const balance = async ({ wallet, chain = config.thirdweb.defaultChain }) => {
   return provider().getBalance({ chain, address: wallet.address || wallet.publicKey });
 };
 
+// All tokens the wallet holds (native + ERC-20), for the multi-token balance
+// view. Only the Lisk adapter implements this; provider() is hardcoded to lisk.
+const tokenBalances = async ({ wallet, limit }) => {
+  return provider().getTokenBalances({ address: wallet.address || wallet.publicKey, limit });
+};
+
 const sendToken = async ({ wallet, chain, destination, amount, tokenAddress }) => {
   return provider().sendToken({
     chain,
@@ -94,6 +100,7 @@ module.exports = {
   createOrGetWallet,
   getWalletByPhoneNumber,
   balance,
+  tokenBalances,
   sendToken,
   transactionHistory,
 };

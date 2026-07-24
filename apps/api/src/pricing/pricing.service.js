@@ -48,31 +48,55 @@ const settlementFeeEstimate = async ({ sourceCurrency, sourceAmount, route }) =>
   }
 };
 
-// Cached ~60s so a burst of "balance" messages doesn't hammer
-// exchangerate-api on every single one — no Redis in this project, so a
-// plain module-level cache is enough (see sendam-mvp-state memory note).
-const USDC_NGN_RATE_TTL_MS = 60 * 1000;
-let cachedUsdcNgnRate = null;
+// Cached ~60s so a burst of "balance" messages doesn't hammer exchangerate-api
+// on every single one — no Redis in this project, so a plain module-level cache
+// is enough (see sendam-mvp-state memory note).
+const USD_NGN_RATE_TTL_MS = 60 * 1000;
+let cachedUsdNgnRate = null;
 
-const getUsdcToNairaRate = async () => {
+// USD -> NGN. Uses a live FX rate when EXCHANGERATE_API_KEY is configured,
+// otherwise falls back to the fixed peg (config.pricing.usdNgnFixedRate, 1390).
+// Never returns null: displaying an approximate naira value beats showing none.
+// To go fully live later, wire a real USD/NGN (and per-token USD) feed here —
+// callers don't change.
+const getUsdToNairaRate = async () => {
   const now = Date.now();
-  if (cachedUsdcNgnRate && now - cachedUsdcNgnRate.fetchedAt < USDC_NGN_RATE_TTL_MS) {
-    return cachedUsdcNgnRate.rate;
+  if (cachedUsdNgnRate && now - cachedUsdNgnRate.fetchedAt < USD_NGN_RATE_TTL_MS) {
+    return cachedUsdNgnRate.rate;
   }
-  const rate = await getExchangeRate({ sourceCurrency: 'USDC', targetCurrency: 'NGN' });
-  cachedUsdcNgnRate = { rate, fetchedAt: now };
+  let rate = null;
+  try {
+    rate = await getExchangeRate({ sourceCurrency: 'USD', targetCurrency: 'NGN' });
+  } catch (error) {
+    logger.warn(`USD/NGN rate fetch failed, using fixed peg: ${error.message}`);
+  }
+  if (!rate) rate = config.pricing.usdNgnFixedRate;
+  cachedUsdNgnRate = { rate, fetchedAt: now };
   return rate;
 };
 
-// The wallet only ever holds/sends USDC, so a naira display value is just
-// USDC amount × the USDC/NGN rate — no separate crypto price feed needed.
-const toNaira = async (usdcAmount) => {
-  const amount = Number(usdcAmount);
-  if (!Number.isFinite(amount)) return null;
-  const rate = await getUsdcToNairaRate();
-  if (!rate) return null;
-  return amount * rate;
+// Stablecoins are pegged to ~$1, so we can price them without any market feed.
+const STABLECOINS = new Set(['USDC', 'USDT', 'DAI', 'USDE', 'PYUSD']);
+const isStablecoin = (symbol) => STABLECOINS.has(String(symbol || '').toUpperCase());
+
+// Naira value of a token holding: amount × (USD price per token) × USD/NGN.
+// The USD price comes from `usdPrice` when the caller has one (e.g. Blockscout's
+// exchange_rate), otherwise $1 for stablecoins, otherwise unknown -> null so the
+// caller can omit the naira figure rather than invent one.
+const tokenToNaira = async ({ amount, usdPrice = null, symbol }) => {
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount)) return null;
+  const priceUsd = Number.isFinite(Number(usdPrice)) && Number(usdPrice) > 0
+    ? Number(usdPrice)
+    : (isStablecoin(symbol) ? 1 : null);
+  if (priceUsd == null) return null;
+  const ngnRate = await getUsdToNairaRate();
+  return numericAmount * priceUsd * ngnRate;
 };
+
+// Back-compat: the original single-USDC balance path. USDC ≈ $1, so this is
+// just tokenToNaira for a USDC amount.
+const toNaira = async (usdcAmount) => tokenToNaira({ amount: usdcAmount, symbol: 'USDC' });
 
 const createQuote = async ({ userId, sourceCurrency = 'NGN', targetCurrency = 'USDC', sourceAmount, route, provider }) => {
   const rate = await getExchangeRate({ sourceCurrency, targetCurrency });
@@ -106,4 +130,7 @@ module.exports = {
   getExchangeRate,
   toMinorUnits,
   toNaira,
+  getUsdToNairaRate,
+  tokenToNaira,
+  isStablecoin,
 };
