@@ -78,15 +78,16 @@ test('createQuote falls back to the local estimate when the settlement quote cal
   assert.equal(quote.metadata, undefined);
 });
 
-test('toNaira multiplies the USDC amount by the USDC/NGN rate', async () => {
+test('toNaira multiplies the USDC amount by the USD/NGN rate', async () => {
   let callCount = 0;
   stubAxiosGet(async (url) => {
     callCount += 1;
-    assert.match(url, /\/pair\/USDC\/NGN$/);
+    assert.match(url, /\/pair\/USD\/NGN$/);
     return { data: { conversion_rate: 1500 } };
   });
   const pricing = freshPricingService();
 
+  // 10 USDC × $1 × 1500
   const result = await pricing.toNaira('10');
   assert.equal(result, 15000);
   assert.equal(callCount, 1);
@@ -118,15 +119,48 @@ test('toNaira returns null for a non-numeric amount without making a request', a
   assert.equal(callCount, 0);
 });
 
-test('toNaira returns null when no exchange rate API key is configured', async () => {
+test('toNaira falls back to the fixed USD/NGN peg when no exchange rate API key is configured', async () => {
   delete require.cache[require.resolve('../src/config/env')];
   const originalKey = process.env.EXCHANGERATE_API_KEY;
   delete process.env.EXCHANGERATE_API_KEY;
   try {
+    // No key -> getExchangeRate returns null without hitting axios; the fixed
+    // 1390 peg is used instead of showing no naira value.
     stubAxiosGet(async () => { throw new Error('should not be called'); });
     const pricing = freshPricingService();
-    assert.equal(await pricing.toNaira('10'), null);
+    assert.equal(await pricing.toNaira('10'), 13900);
   } finally {
     if (originalKey) process.env.EXCHANGERATE_API_KEY = originalKey;
   }
+});
+
+test('tokenToNaira prices a stablecoin at $1 × the USD/NGN rate', async () => {
+  stubAxiosGet(async (url) => {
+    assert.match(url, /\/pair\/USD\/NGN$/);
+    return { data: { conversion_rate: 1400 } };
+  });
+  const pricing = freshPricingService();
+  assert.equal(await pricing.tokenToNaira({ amount: '10', symbol: 'USDC' }), 14000);
+});
+
+test('tokenToNaira uses an explicit usdPrice for a non-stable token', async () => {
+  stubAxiosGet(async () => ({ data: { conversion_rate: 1400 } }));
+  const pricing = freshPricingService();
+  // 2 tokens × $3 × 1400
+  assert.equal(await pricing.tokenToNaira({ amount: '2', usdPrice: 3, symbol: 'LSK' }), 8400);
+});
+
+test('tokenToNaira returns null (no invented value) when a non-stable token has no known price', async () => {
+  let callCount = 0;
+  stubAxiosGet(async () => { callCount += 1; return { data: { conversion_rate: 1400 } }; });
+  const pricing = freshPricingService();
+  assert.equal(await pricing.tokenToNaira({ amount: '2', symbol: 'LSK' }), null);
+  // Returns before ever needing the FX rate.
+  assert.equal(callCount, 0);
+});
+
+test('getUsdToNairaRate falls back to the fixed 1390 peg when the FX fetch throws', async () => {
+  stubAxiosGet(async () => { throw new Error('network down'); });
+  const pricing = freshPricingService();
+  assert.equal(await pricing.getUsdToNairaRate(), 1390);
 });
