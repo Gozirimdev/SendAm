@@ -51,8 +51,39 @@ So the route is two steps:
 
 1. **Claim testnet USDC on Ethereum Sepolia** — [faucet.circle.com](https://faucet.circle.com/),
    20 USDC every 2 hours per address, no account needed.
-2. **Bridge it to Lisk Sepolia** — [sepolia-bridge.lisk.com](https://sepolia-bridge.lisk.com/).
-   You need a little Sepolia ETH to pay for the deposit transaction.
+2. **Bridge it to Lisk Sepolia** — either the web bridge at
+   [sepolia-bridge.lisk.com](https://sepolia-bridge.lisk.com/), or from the terminal:
+
+```bash
+export SEPOLIA_PRIVATE_KEY=0x...          # never pass this as an argument
+node scripts/bridge-usdc-to-lisk.js --amount 20                          # dry run
+node scripts/bridge-usdc-to-lisk.js --amount 20 --confirm                # execute
+node scripts/bridge-usdc-to-lisk.js --amount 20 --to 0xUserWallet --confirm
+```
+
+Either way you need a little Sepolia ETH to pay for the deposit transaction.
+
+### How the USDC bridge actually works
+
+USDC.e is Circle's Bridged USDC Standard, **not** an `OptimismMintableERC20` —
+`l1Token()` and `remoteToken()` both revert on it, so the L2StandardBridge
+cannot mint it and the generic OP bridge path does not apply. Deposits go
+through a dedicated adapter pair:
+
+| | |
+| --- | --- |
+| L1 adapter (Ethereum Sepolia) | `0x8454EAd8e8B6D63951033F38D61A5F0AC6f40279` |
+| L2 adapter (Lisk Sepolia) | `0x45c01066E6b913D2EF4ad48E3629E66Ae41904b1` |
+| L1 USDC (what Circle's faucet gives you) | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
+
+The flow is `USDC.approve(L1_ADAPTER, amount)` then
+`L1_ADAPTER.sendMessage(to, amount, minGasLimit)`; the L2 side is minted via
+`L2CrossDomainMessenger.relayMessage` → `receiveMessage(address,address,uint256)`
+on the L2 adapter, usually within a few minutes.
+
+The script re-checks the adapter's own `USDC()` and `LINKED_ADAPTER()` on-chain
+before granting any approval, so a wrong or substituted address fails loudly
+instead of sending funds somewhere unrecoverable.
 
 Sanity-check the result at any point:
 
