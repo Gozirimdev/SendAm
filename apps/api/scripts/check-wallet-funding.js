@@ -12,6 +12,7 @@
 require('dotenv').config();
 const { ethers } = require('ethers');
 const config = require('../src/config/env');
+const { withRetry } = require('./lib/retry');
 
 const target = process.argv[2];
 if (!target) {
@@ -49,13 +50,17 @@ const ERC20_ABI = [
   });
   const token = new ethers.Contract(config.lisk.usdcContractAddress, ERC20_ABI, provider);
 
-  const [decimals, symbol, tokenRaw, nativeRaw, feeData] = await Promise.all([
-    token.decimals(),
-    token.symbol(),
-    token.balanceOf(address),
-    provider.getBalance(address),
-    provider.getFeeData(),
-  ]);
+  const [decimals, symbol, tokenRaw, nativeRaw, feeData] = await withRetry(
+    () =>
+      Promise.all([
+        token.decimals(),
+        token.symbol(),
+        token.balanceOf(address),
+        provider.getBalance(address),
+        provider.getFeeData(),
+      ]),
+    { label: 'reading balances' }
+  );
 
   const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || 0n;
   // 65k is a typical ERC-20 transfer; the L1 data fee on this OP Stack chain

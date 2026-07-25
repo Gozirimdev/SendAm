@@ -398,9 +398,12 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
   // command matching below so "fund me" can't be read as something else.
   if (matchesFundRequest(normalized)) {
     if (!testnetFaucet.configured()) {
+      // "Top up the faucet" implied one exists and is empty. Usually it simply
+      // isn't set up — most deployments fund testers directly instead
+      // (scripts/fund-user.js), so ask for the thing that actually happens.
       await sendTextMessage(
         phoneNumber,
-        "Test funds aren't available here. If you're testing, ask the team to top up the faucet."
+        "I can't send test funds myself here — ask the team to fund your wallet and they can do it from their side."
       );
       return;
     }
