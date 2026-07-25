@@ -26,6 +26,7 @@ const { ethers } = require('ethers');
 const prisma = require('../src/common/prisma');
 const config = require('../src/config/env');
 const { phoneCandidates, looksLikePhone } = require('../src/utils/phone');
+const { withRetry } = require('./lib/retry');
 
 const L1_ADAPTER = '0x8454EAd8e8B6D63951033F38D61A5F0AC6f40279';
 const L1_USDC = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
@@ -108,10 +109,10 @@ const target = positional();
   const liskSigner = new ethers.Wallet(key, liskProvider);
   const funder = await liskSigner.getAddress();
 
-  const [funderLisk, recipientLisk] = await Promise.all([
-    liskProvider.getBalance(funder),
-    liskProvider.getBalance(recipient),
-  ]);
+  const [funderLisk, recipientLisk] = await withRetry(
+    () => Promise.all([liskProvider.getBalance(funder), liskProvider.getBalance(recipient)]),
+    { label: 'reading Lisk balances' }
+  );
 
   console.log(`funding from    : ${funder}`);
   console.log(`recipient       : ${recipient}`);
@@ -157,7 +158,10 @@ const target = positional();
 
     // Same check as bridge-usdc-to-lisk.js: confirm this really is the adapter
     // wired to this USDC and to Lisk, before approving anything.
-    const [wiredUsdc, wiredLinked] = await Promise.all([adapter.USDC(), adapter.LINKED_ADAPTER()]);
+    const [wiredUsdc, wiredLinked] = await withRetry(
+      () => Promise.all([adapter.USDC(), adapter.LINKED_ADAPTER()]),
+      { label: 'verifying the bridge adapter' }
+    );
     if (ethers.getAddress(wiredUsdc) !== ethers.getAddress(L1_USDC)) {
       throw new Error(`Adapter's USDC() is ${wiredUsdc}, expected ${L1_USDC}. Refusing to continue.`);
     }
@@ -166,11 +170,10 @@ const target = positional();
     }
 
     const usdc = new ethers.Contract(L1_USDC, ERC20_ABI, sepoliaSigner);
-    const [decimals, balance, allowance] = await Promise.all([
-      usdc.decimals(),
-      usdc.balanceOf(funder),
-      usdc.allowance(funder, L1_ADAPTER),
-    ]);
+    const [decimals, balance, allowance] = await withRetry(
+      () => Promise.all([usdc.decimals(), usdc.balanceOf(funder), usdc.allowance(funder, L1_ADAPTER)]),
+      { label: 'reading Sepolia balances' }
+    );
     const amount = ethers.parseUnits(String(usdcAmount), decimals);
 
     if (balance < amount) {
