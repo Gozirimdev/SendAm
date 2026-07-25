@@ -111,6 +111,10 @@ module.exports = {
     escrowContractAddress: process.env.LISK_ESCROW_CONTRACT_ADDRESS,
     usdcContractAddress: process.env.LISK_USDC_CONTRACT_ADDRESS,
     explorerBaseUrl: process.env.LISK_EXPLORER_BASE_URL,
+    // The chain's native (gas) currency. Lisk is an OP Stack L2, so this is
+    // ETH — LSK itself lives on the chain as an ordinary ERC-20. Overridable
+    // only so a fork with a custom gas token doesn't need a code change.
+    nativeSymbol: process.env.LISK_NATIVE_SYMBOL || 'ETH',
     // A funded, self-custodied Wallet row (see lisk.adapter.js) that pays
     // gas top-ups planned by sendam-paymaster into user wallets.
     gasWalletAddress: process.env.LISK_GAS_WALLET_ADDRESS,

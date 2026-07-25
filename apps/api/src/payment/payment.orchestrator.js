@@ -80,8 +80,28 @@ const executePayment = async ({
   try {
     if (rail === 'lisk') {
       // Self-custody has no relayer sponsoring gas — top up the sending
-      // wallet's native LSK first, or the transfer below simply reverts.
+      // wallet's native ETH first, or the transfer below simply reverts.
       await ensureGas({ wallet, idempotencyKey: transaction.id });
+
+      // Check the two independent things that make a transfer fail, so the
+      // user is told which one it actually was. On-chain both surface only as
+      // a revert string after the fact, and "no USDC to send" and "no ETH to
+      // pay gas with" need completely different actions from the user.
+      const preflight = await walletService.preflightSend({
+        wallet,
+        destination,
+        amount,
+        tokenAddress: config.lisk.usdcContractAddress,
+      });
+      if (!preflight.ok) {
+        const code = preflight.reason === 'insufficient_gas'
+          ? 'INSUFFICIENT_GAS_BALANCE'
+          : 'INSUFFICIENT_TOKEN_BALANCE';
+        throw new Error(
+          `${code}: wallet holds ${preflight.have} ${preflight.symbol}, needs ${preflight.need} ${preflight.symbol}`
+        );
+      }
+
       const result = await walletService.sendToken({
         wallet,
         chain: config.lisk.chainId,

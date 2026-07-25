@@ -46,8 +46,27 @@ const describeExecutionError = (error) => {
   if (/manual compliance review/i.test(message)) {
     return 'That payment needs a manual review before it can go through. Our team will be in touch.';
   }
+  // The two "not enough money" cases are completely different problems and
+  // need different actions from the user, so they must never share a message.
+  // Both are raised by the orchestrator's preflight with the real figures
+  // attached; the balances are the user's own, so quoting them back is fine.
+  const shortfall = message.match(/INSUFFICIENT_(?:TOKEN|GAS)_BALANCE: wallet holds (\S+) (\S+), needs (\S+)/);
+  if (message.startsWith('INSUFFICIENT_TOKEN_BALANCE')) {
+    const [, have, symbol, need] = shortfall || [];
+    return `You don't have enough ${symbol || 'USDC'} for that payment — your wallet holds ${have || '0'}, and you tried to send ${need || 'more'}. Nothing was sent. Add funds and try again.`;
+  }
+  if (message.startsWith('INSUFFICIENT_GAS_BALANCE')) {
+    const [, have] = shortfall || [];
+    return `Your wallet has the funds to send, but not enough ${config.lisk.nativeSymbol} to pay the network fee (it holds ${have || '0'} ${config.lisk.nativeSymbol}). Nothing was sent — a tiny amount, around 0.0001 ${config.lisk.nativeSymbol}, covers over a thousand transfers.`;
+  }
+
+  // Post-hoc revert strings, for anything that slipped past the preflight
+  // (a balance that changed between the check and the send).
+  if (/intrinsic transaction cost|insufficient funds for gas/i.test(message)) {
+    return `Your wallet doesn't have enough ${config.lisk.nativeSymbol} to pay the network fee. Nothing was sent.`;
+  }
   if (/insufficient|exceeds balance|transfer amount exceeds/i.test(message)) {
-    return "You don't have enough in your wallet for that payment (remember gas is paid in LSK). Check \"balance\" and try again.";
+    return "You don't have enough in your wallet for that payment. Nothing was sent — check \"balance\" and try again.";
   }
   if (/gas|LISK_GAS_WALLET_ADDRESS|paymaster/i.test(message)) {
     return "I couldn't cover the network fee for that transfer right now. Nothing was sent — please try again shortly.";
