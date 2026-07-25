@@ -4,6 +4,7 @@ const config = require('../config/env');
 const { executePayment } = require('../payment/payment.orchestrator');
 const { verifyPin } = require('../compliance/pin.service');
 const { isValidPin } = require('../utils/validators');
+const faucet = require('../wallet/faucet.service');
 
 // The single place a confirmed payment is actually carried out.
 //
@@ -53,7 +54,13 @@ const describeExecutionError = (error) => {
   const shortfall = message.match(/INSUFFICIENT_(?:TOKEN|GAS)_BALANCE: wallet holds (\S+) (\S+), needs (\S+)/);
   if (message.startsWith('INSUFFICIENT_TOKEN_BALANCE')) {
     const [, have, symbol, need] = shortfall || [];
-    return `You don't have enough ${symbol || 'USDC'} for that payment — your wallet holds ${have || '0'}, and you tried to send ${need || 'more'}. Nothing was sent. Add funds and try again.`;
+    // On testnet, point at the thing that actually fixes it rather than
+    // leaving "add funds" as an exercise the user can't complete — their key
+    // is held by this backend, so they can't fund the wallet themselves.
+    const remedy = faucet.configured()
+      ? ' Say "fund me" and I\'ll top you up with test USDC.'
+      : ' Add funds and try again.';
+    return `You don't have enough ${symbol || 'USDC'} for that payment — your wallet holds ${have || '0'}, and you tried to send ${need || 'more'}. Nothing was sent.${remedy}`;
   }
   if (message.startsWith('INSUFFICIENT_GAS_BALANCE')) {
     const [, have] = shortfall || [];

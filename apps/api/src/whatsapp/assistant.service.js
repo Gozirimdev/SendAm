@@ -11,6 +11,7 @@ const { isValidPin } = require('../utils/validators');
 const { resolveDestination, describeFailure } = require('./recipient.service');
 const { confirmPendingSend, clearPendingSend, isExpired } = require('./send.service');
 const pinFlow = require('./pinFlow.service');
+const faucet = require('../wallet/faucet.service');
 
 // Matches sendam-ai's default flow token TTL (15 min) — no point outliving
 // the token we'd be resuming.
@@ -235,6 +236,25 @@ const handleGetStartedReply = async ({ phoneNumber, user, text }) => {
 
 const CANCEL_WORDS = ['no', 'cancel', 'stop', 'abort', 'nevermind', 'never mind'];
 
+// Ways people ask for test money. Exact phrases plus a loose pattern, because
+// this is the first thing a new tester reaches for and getting the wording
+// wrong should not leave them stuck. Deliberately local rather than another
+// sendam-ai round trip: it's a fixed command, not free-form intent.
+const FUND_ME_COMMANDS = new Set([
+  'fund me', 'fund', 'faucet', 'test funds', 'testnet funds', 'test money',
+  'get usdc', 'request usdc', 'need usdc', 'free usdc', 'top up', 'topup',
+]);
+const FUND_ME_PATTERN = /\b(fund|faucet|top ?up)\b.*\b(me|wallet|account)\b|\b(get|request|need|send)\b.*\btest\b.*\b(usdc|funds?|money)\b/i;
+
+// Exported so the phrasings are tested directly. A miss here doesn't fail
+// loudly — it just falls through to the generic help reply — so the matching
+// needs coverage of its own rather than being inferred from the happy path.
+const matchesFundRequest = (text) => {
+  const normalized = String(text || '').trim().toLowerCase();
+  if (!normalized) return false;
+  return FUND_ME_COMMANDS.has(normalized) || FUND_ME_PATTERN.test(normalized);
+};
+
 // Everything that must be true before a user can be asked to authorise a
 // payment. Each failure used to surface either as silence (an unhandled throw
 // after the PIN was accepted) or as an unexplained "PIN verification failed"
@@ -372,12 +392,35 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
     return;
   }
 
+  // Testnet funding on request. Users can't do this themselves — their key is
+  // held encrypted by this backend and never handed out, so the usual
+  // faucet-then-bridge route isn't open to them. Checked before the generic
+  // command matching below so "fund me" can't be read as something else.
+  if (matchesFundRequest(normalized)) {
+    if (!faucet.configured()) {
+      await sendTextMessage(
+        phoneNumber,
+        "Test funds aren't available here. If you're testing, ask the team to top up the faucet."
+      );
+      return;
+    }
+    const result = await faucet.dispense({ user });
+    await sendTextMessage(phoneNumber, result.message);
+    return;
+  }
+
   // 'hi'/'hello' deliberately fall through to sendam-ai below instead of a
   // static reply here — GREETING now gets a tone-matched response instead of
   // one fixed line every time. 'help'/'menu' stay static: they're an
   // explicit request for the command list, not a greeting.
   if (['help', 'menu'].includes(normalized)) {
-    await sendTextMessage(phoneNumber, 'SendAm can help with send money, receive money, balance, my address, escrow, nearby cash-out, contacts, transaction history, and receipts.');
+    const faucetLine = faucet.configured()
+      ? '\n\nTesting? Say "fund me" and I\'ll send you test USDC.'
+      : '';
+    await sendTextMessage(
+      phoneNumber,
+      `SendAm can help with send money, receive money, balance, my address, escrow, nearby cash-out, contacts, transaction history, and receipts.${faucetLine}`
+    );
     return;
   }
 
@@ -520,4 +563,5 @@ module.exports = {
   formatWalletBalance,
   resolveGreetingReply,
   personalizeGreeting,
+  matchesFundRequest,
 };
