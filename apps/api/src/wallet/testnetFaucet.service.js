@@ -27,7 +27,12 @@ const DRIP_TYPE = 'faucet_drip';
 // real funds for anyone who can send a WhatsApp message.
 const TESTNET_CHAIN_IDS = new Set([4202]);
 
-const treasuryAddress = () => config.lisk.faucetWalletAddress || config.lisk.gasWalletAddress;
+// The reserved owner of the platform's system wallet. Shared with
+// scripts/create-gas-wallet.js so the two converge on one wallet: whichever
+// path runs first creates it, the other finds it.
+const SYSTEM_PHONE = 'system:lisk-gas-wallet';
+
+const configuredTreasury = () => config.lisk.faucetWalletAddress || config.lisk.gasWalletAddress;
 
 // Uses the adapter's resolved chain id, not raw config: LISK_CHAIN_ID is
 // commonly a name like 'lisk-sepolia' rather than a number, which Number()
@@ -35,15 +40,88 @@ const treasuryAddress = () => config.lisk.faucetWalletAddress || config.lisk.gas
 // faucet on exactly the testnet it's meant for.
 const isTestnet = () => TESTNET_CHAIN_IDS.has(lisk.resolvedChainId());
 
-const configured = () => Boolean(config.faucet.enabled && treasuryAddress() && isTestnet());
+// Deliberately does NOT require a treasury address. Requiring one made the
+// whole feature unreachable for anyone who doesn't control the API's
+// environment: the address had to be an env var, and minting the wallet behind
+// it needed ENCRYPTION_KEY, which only the deployment has. The treasury is now
+// resolved from the database and provisioned on demand by this process — which
+// holds ENCRYPTION_KEY by definition — so the only thing a human still has to
+// do is send test funds to an address.
+const configured = () => Boolean(config.faucet.enabled && isTestnet());
 
 // Why the faucet isn't available, for operators reading logs — never shown to
 // the user verbatim.
 const unavailableReason = () => {
   if (!config.faucet.enabled) return 'TESTNET_FAUCET_ENABLED is false';
   if (!isTestnet()) return `chain ${config.lisk.chainId} is not a known testnet`;
-  if (!treasuryAddress()) return 'no LISK_FAUCET_WALLET_ADDRESS or LISK_GAS_WALLET_ADDRESS is set';
   return null;
+};
+
+/**
+ * The wallet the faucet pays out of, creating it if it doesn't exist yet.
+ *
+ * An explicit LISK_FAUCET_WALLET_ADDRESS / LISK_GAS_WALLET_ADDRESS still wins,
+ * for deployments that manage the treasury themselves. Otherwise we look for
+ * the system wallet in the database and, failing that, mint one here — this
+ * process has ENCRYPTION_KEY, so the key it stores is one it can actually sign
+ * with later, which is precisely what an operator running the creation script
+ * from a laptop cannot guarantee.
+ *
+ * @returns {Promise<{address: string, created: boolean}>}
+ */
+const resolveTreasury = async () => {
+  const explicit = configuredTreasury();
+  if (explicit) return { address: explicit, created: false };
+
+  const existing = await prisma.wallet.findFirst({ where: { phoneNumber: SYSTEM_PHONE } });
+  if (existing?.address) return { address: existing.address, created: false };
+
+  const managed = await lisk.createManagedWallet();
+
+  // Two users saying "fund me" at once must not create two treasuries. The
+  // unique constraint on User.phoneNumber is the arbiter: whoever loses the
+  // race re-reads the winner's wallet instead of minting a second one.
+  let owner;
+  try {
+    owner = await prisma.user.create({
+      data: { phoneNumber: SYSTEM_PHONE, preferredName: 'SendAm faucet treasury' },
+    });
+  } catch (error) {
+    if (error.code !== 'P2002') throw error;
+    const raced = await prisma.wallet.findFirst({ where: { phoneNumber: SYSTEM_PHONE } });
+    if (raced?.address) return { address: raced.address, created: false };
+    owner = await prisma.user.findUnique({ where: { phoneNumber: SYSTEM_PHONE } });
+  }
+
+  const wallet = await prisma.wallet.create({
+    data: {
+      userId: owner.id,
+      phoneNumber: SYSTEM_PHONE,
+      provider: 'lisk',
+      providerWalletId: managed.providerWalletId,
+      address: managed.address,
+      publicKey: managed.address,
+      encryptedSecretKey: managed.encryptedSecretKey,
+      primaryChain: 'lisk',
+      supportedChains: ['lisk'],
+      network: 'self-custody',
+    },
+  });
+  await prisma.user.update({ where: { id: owner.id }, data: { walletId: wallet.id } });
+
+  logger.warn(
+    `Created the faucet treasury ${managed.address}. It is empty — send it testnet ETH and USDC.e before "fund me" can pay out.`
+  );
+  await writeAuditLog({
+    actorType: 'system',
+    actorId: 'faucet',
+    action: 'faucet.treasury_created',
+    entityType: 'Wallet',
+    entityId: String(wallet.id),
+    metadata: { address: managed.address },
+  });
+
+  return { address: managed.address, created: true };
 };
 
 const hoursUntil = (since, cooldownHours) => {
@@ -63,7 +141,7 @@ const dispense = async ({ user }) => {
     logger.warn(`Testnet faucet requested but unavailable: ${unavailableReason()}`);
     return {
       status: 'unavailable',
-      message: "Test funds aren't available right now. If you're testing, ask the team to top up the faucet.",
+      message: "I can't send test funds here — ask the team to fund your wallet and they can do it from their side.",
     };
   }
 
@@ -107,26 +185,43 @@ const dispense = async ({ user }) => {
   }
 
   const amount = config.faucet.amount;
-  const treasury = treasuryAddress();
+
+  let treasury;
+  try {
+    ({ address: treasury } = await resolveTreasury());
+  } catch (error) {
+    logger.error(`Faucet could not resolve a treasury: ${error.message}`);
+    return { status: 'failed', message: "Couldn't set up test funding just now — please try again shortly." };
+  }
 
   // Check the treasury can cover this before doing anything, so an empty
   // faucet says so instead of failing mid-transfer.
-  let treasuryBalance;
+  let treasuryUsdc;
+  let treasuryGas;
   try {
-    treasuryBalance = await lisk.getBalance({ address: treasury });
+    [treasuryUsdc, treasuryGas] = await Promise.all([
+      lisk.getBalance({ address: treasury }),
+      lisk.getNativeBalance({ address: treasury }),
+    ]);
   } catch (error) {
     logger.error(`Faucet could not read the treasury balance: ${error.message}`);
     return { status: 'failed', message: "Couldn't reach the network just now — please try again shortly." };
   }
 
-  if (Number(treasuryBalance.value) < Number(amount)) {
+  if (Number(treasuryUsdc.value) < Number(amount)) {
     logger.error(
-      `Faucet treasury ${treasury} is empty: holds ${treasuryBalance.value} USDC.e, needs ${amount}. ` +
-        'Top it up with: node scripts/bridge-usdc-to-lisk.js --amount 100 --to ' + treasury
+      `Faucet treasury ${treasury} is short: holds ${treasuryUsdc.value} USDC.e, needs ${amount}. ` +
+        `Top it up with: npm run fund:user -- ${treasury} --usdc 100 --confirm`
     );
+    // The address is in the reply on purpose. Whoever is testing is usually
+    // also whoever can fund it, and a dead end that doesn't say where to send
+    // money is what made this feature unusable in the first place. Testnet
+    // addresses are public, so there is nothing to leak.
     return {
       status: 'treasury_empty',
-      message: "The test faucet has run dry. The team has been alerted — please try again later.",
+      message:
+        `The test faucet is empty, so I can't send you anything yet.\n\n` +
+        `Whoever is running this can top it up by sending testnet ETH and USDC.e to:\n${treasury}`,
     };
   }
 
@@ -145,10 +240,31 @@ const dispense = async ({ user }) => {
   });
 
   try {
-    // Gas first: USDC.e the user cannot afford to move is no use to them. A
-    // failure here shouldn't block the drip — they may already have gas.
+    // Gas first: USDC.e the user cannot afford to move is no use to them.
+    //
+    // ensureGas only acts when a gas wallet is configured, which for a
+    // deployment relying on the auto-provisioned treasury it is not — so fall
+    // back to sending gas from the treasury itself. Same wallet, one thing to
+    // fund. A failure here never blocks the drip: they may already have gas,
+    // and USDC without gas still beats nothing.
     try {
-      await ensureGas({ wallet, idempotencyKey: transaction.id });
+      const topUp = await ensureGas({ wallet, idempotencyKey: transaction.id });
+      if (!topUp.toppedUp) {
+        const userGas = await lisk.getNativeBalance({ address: destination });
+        const floor = ethers.parseEther(String(config.lisk.gasMinBalance));
+        const target = ethers.parseEther(String(config.lisk.gasTopUpTo));
+        const need = target - BigInt(userGas.raw);
+
+        if (BigInt(userGas.raw) < floor && need > 0n && BigInt(treasuryGas.raw) >= need) {
+          await lisk.sendNative({ fromAddress: treasury, destination, amountWei: need.toString() });
+          logger.info(`Faucet sent ${ethers.formatEther(need)} ETH of gas to ${destination}`);
+        } else if (BigInt(userGas.raw) < floor) {
+          logger.warn(
+            `Faucet treasury ${treasury} has ${treasuryGas.value} ETH — not enough to give ${destination} gas. ` +
+              'Send it testnet ETH from https://console.optimism.io/faucet'
+          );
+        }
+      }
     } catch (gasError) {
       logger.warn(`Faucet could not top up gas for ${destination}: ${gasError.message}`);
     }
@@ -196,7 +312,9 @@ module.exports = {
   dispense,
   configured,
   unavailableReason,
-  treasuryAddress,
+  resolveTreasury,
+  configuredTreasury,
   isTestnet,
+  SYSTEM_PHONE,
   DRIP_TYPE,
 };

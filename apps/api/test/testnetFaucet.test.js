@@ -15,8 +15,13 @@ const TREASURY = '0x1111111111111111111111111111111111111111';
 const USER_WALLET = '0x2222222222222222222222222222222222222222';
 
 const load = ({ lisk = {}, prisma = {}, env = {}, walletService, gasTopup } = {}) => {
+  // Every env var any test sets must appear here, so each load() resets it.
+  // Omitting one lets a value set by an earlier test leak into every later
+  // one — which is exactly how the explicit-treasury test silently redirected
+  // the empty-treasury assertion at a different address.
   for (const [k, v] of Object.entries({
     LISK_GAS_WALLET_ADDRESS: TREASURY,
+    LISK_FAUCET_WALLET_ADDRESS: undefined,
     LISK_CHAIN_ID: 'lisk-sepolia',
     TESTNET_FAUCET_ENABLED: 'true',
     TESTNET_FAUCET_AMOUNT: '10',
@@ -30,6 +35,13 @@ const load = ({ lisk = {}, prisma = {}, env = {}, walletService, gasTopup } = {}
   stubModule('../src/wallet/lisk.adapter', {
     resolvedChainId: () => 4202,
     getBalance: async () => ({ value: '1000' }),
+    getNativeBalance: async () => ({ value: '1', raw: '1000000000000000000' }),
+    sendNative: async () => ({ transactionHash: '0xgas' }),
+    createManagedWallet: async () => ({
+      providerWalletId: TREASURY,
+      address: TREASURY,
+      encryptedSecretKey: 'enc',
+    }),
     sendToken: async () => ({ transactionHash: '0xdrip', explorerUrl: 'https://exp/tx/0xdrip' }),
     ...lisk,
   });
@@ -43,6 +55,17 @@ const load = ({ lisk = {}, prisma = {}, env = {}, walletService, gasTopup } = {}
       create: async (args) => ({ id: 'tx-drip', ...args.data }),
       update: async (args) => args.data,
       ...(prisma.transaction || {}),
+    },
+    wallet: {
+      findFirst: async () => ({ address: TREASURY }),
+      create: async (args) => ({ id: 'w1', ...args.data }),
+      ...(prisma.wallet || {}),
+    },
+    user: {
+      create: async (args) => ({ id: 'sys', ...args.data }),
+      findUnique: async () => ({ id: 'sys' }),
+      update: async (args) => args.data,
+      ...(prisma.user || {}),
     },
   });
 
@@ -92,10 +115,82 @@ test('resolves a non-numeric LISK_CHAIN_ID via the adapter', async () => {
   assert.equal(faucet.configured(), true);
 });
 
-test('is unavailable when no treasury is configured', async () => {
-  const faucet = load({ env: { LISK_GAS_WALLET_ADDRESS: undefined, LISK_FAUCET_WALLET_ADDRESS: undefined } });
-  assert.equal(faucet.configured(), false);
-  assert.match(faucet.unavailableReason(), /LISK_FAUCET_WALLET_ADDRESS|LISK_GAS_WALLET_ADDRESS/);
+// Requiring a treasury env var made the feature unreachable for anyone who
+// doesn't control the API's environment. It is now provisioned on demand by
+// the server, which is the only process that holds ENCRYPTION_KEY and can
+// therefore store a key it will actually be able to sign with.
+test('works with no treasury env var, provisioning one on first use', async () => {
+  let createdWallet;
+  const faucet = load({
+    env: { LISK_GAS_WALLET_ADDRESS: undefined, LISK_FAUCET_WALLET_ADDRESS: undefined },
+    prisma: {
+      wallet: {
+        findFirst: async () => null, // nothing exists yet
+        create: async (args) => { createdWallet = args.data; return { id: 'w1', ...args.data }; },
+      },
+    },
+  });
+
+  assert.equal(faucet.configured(), true, 'must not depend on a treasury env var');
+
+  const { address, created } = await faucet.resolveTreasury();
+  assert.equal(created, true);
+  assert.equal(address, TREASURY);
+  assert.equal(createdWallet.phoneNumber, faucet.SYSTEM_PHONE);
+  // Stored encrypted by this process, so it can sign with it later.
+  assert.equal(createdWallet.encryptedSecretKey, 'enc');
+});
+
+test('reuses an existing treasury rather than minting a second one', async () => {
+  const faucet = load({
+    env: { LISK_GAS_WALLET_ADDRESS: undefined, LISK_FAUCET_WALLET_ADDRESS: undefined },
+    prisma: {
+      wallet: {
+        findFirst: async () => ({ address: TREASURY }),
+        create: async () => assert.fail('must not create a second treasury'),
+      },
+    },
+  });
+  const { address, created } = await faucet.resolveTreasury();
+  assert.equal(created, false);
+  assert.equal(address, TREASURY);
+});
+
+// Two people saying "fund me" at once must not end up with two treasuries,
+// one of which would silently hold funds nothing pays out of.
+test('loses the creation race gracefully instead of minting a duplicate', async () => {
+  let walletCreated = false;
+  const faucet = load({
+    env: { LISK_GAS_WALLET_ADDRESS: undefined, LISK_FAUCET_WALLET_ADDRESS: undefined },
+    prisma: {
+      wallet: {
+        findFirst: (() => {
+          let call = 0;
+          return async () => (call++ === 0 ? null : { address: TREASURY });
+        })(),
+        create: async () => { walletCreated = true; return { id: 'w2' }; },
+      },
+      user: {
+        create: async () => { const e = new Error('unique'); e.code = 'P2002'; throw e; },
+        findUnique: async () => ({ id: 'sys' }),
+      },
+    },
+  });
+
+  const { address, created } = await faucet.resolveTreasury();
+  assert.equal(created, false);
+  assert.equal(address, TREASURY);
+  assert.equal(walletCreated, false, 'must not write a second treasury wallet');
+});
+
+test('an explicit treasury env var still wins', async () => {
+  const explicit = '0x3333333333333333333333333333333333333333';
+  const faucet = load({
+    env: { LISK_FAUCET_WALLET_ADDRESS: explicit },
+    prisma: { wallet: { findFirst: async () => assert.fail('must not hit the database') } },
+  });
+  const { address } = await faucet.resolveTreasury();
+  assert.equal(address, explicit);
 });
 
 test('enforces the cooldown between claims', async () => {
@@ -151,6 +246,9 @@ test('reports an empty treasury without attempting a transfer', async () => {
   });
   const result = await faucet.dispense({ user });
   assert.equal(result.status, 'treasury_empty');
+  // A dead end that doesn't say where to send money is what made this feature
+  // unusable — the reply must name the address to fund.
+  assert.match(result.message, new RegExp(TREASURY));
 });
 
 // The drip is useless if the user can't afford to move it, but a gas failure

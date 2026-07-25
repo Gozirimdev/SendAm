@@ -39,8 +39,15 @@ const readiness = () => ({
           'LISK_GAS_WALLET_ADDRESS is not set — new wallets are never funded with ETH, so their first send reverts. Create one with scripts/create-gas-wallet.js',
       },
 
+  // Reports the configured treasury when there is one. Without it the faucet
+  // provisions its own on first use, which is a database round trip and so
+  // can't be resolved from this synchronous snapshot — say so rather than
+  // imply nothing is set up.
   testnetFaucet: testnetFaucet.configured()
-    ? { ready: true, treasury: testnetFaucet.treasuryAddress() }
+    ? {
+        ready: true,
+        treasury: testnetFaucet.configuredTreasury() || 'auto-provisioned in the database on first "fund me"',
+      }
     : {
         ready: false,
         reason: `"fund me" is unavailable: ${testnetFaucet.unavailableReason()}.`,
