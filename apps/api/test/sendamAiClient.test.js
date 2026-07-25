@@ -6,9 +6,16 @@ const http = require('node:http');
 // DATABASE_URL is unset — same pattern as assistantIntentMapping.test.js.
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://user:pass@localhost:5432/test';
 process.env.SENDAM_AI_SIGNING_SECRET = process.env.SENDAM_AI_SIGNING_SECRET || 'test-secret';
-// Real cold starts take seconds; a short fuse here keeps the test fast
-// without changing the retry logic under test.
-process.env.SENDAM_AI_TIMEOUT_MS = '200';
+// Real cold starts take seconds; a short fuse here keeps the test fast without
+// changing the retry logic under test.
+//
+// Not *too* short, though. At 200ms this flaked intermittently under the
+// parallel full-suite run: the cases that are supposed to succeed do a real
+// local HTTP round trip, and under load that can itself exceed the fuse, so the
+// "warm retry" would time out and the assertion fail. The cases that are
+// supposed to time out never respond at all, so a larger value costs only wall
+// clock, never correctness.
+process.env.SENDAM_AI_TIMEOUT_MS = '1500';
 
 const startServer = (handler) => new Promise((resolve) => {
   const server = http.createServer(handler);
