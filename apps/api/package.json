@@ -9,7 +9,10 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "test": "node --test"
+    "test": "node --test",
+    "gas-wallet:create": "node scripts/create-gas-wallet.js",
+    "wallet:check": "node scripts/check-wallet-funding.js",
+    "bridge:usdc": "node scripts/bridge-usdc-to-lisk.js"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
