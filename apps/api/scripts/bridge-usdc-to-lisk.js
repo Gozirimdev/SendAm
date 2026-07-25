@@ -20,6 +20,7 @@
  * go through a dedicated pair of adapters, verified on-chain below.
  */
 const { ethers } = require('ethers');
+const { withRetry } = require('./lib/retry');
 
 // Ethereum Sepolia. USDC() and LINKED_ADAPTER() on this contract are checked
 // against the constants below at runtime, so a wrong address here fails loudly
@@ -81,7 +82,10 @@ const has = (name) => process.argv.includes(`--${name}`);
 
   // Confirm the adapter really is the one wired to this USDC and to the Lisk
   // L2 adapter, before any approval is granted.
-  const [wiredUsdc, wiredLinked] = await Promise.all([adapter.USDC(), adapter.LINKED_ADAPTER()]);
+  const [wiredUsdc, wiredLinked] = await withRetry(
+    () => Promise.all([adapter.USDC(), adapter.LINKED_ADAPTER()]),
+    { label: 'verifying the bridge adapter' }
+  );
   if (ethers.getAddress(wiredUsdc) !== ethers.getAddress(L1_USDC)) {
     throw new Error(`Adapter's USDC() is ${wiredUsdc}, expected ${L1_USDC}. Refusing to continue.`);
   }
@@ -90,12 +94,16 @@ const has = (name) => process.argv.includes(`--${name}`);
   }
 
   const usdc = new ethers.Contract(L1_USDC, ERC20_ABI, signer);
-  const [decimals, balance, allowance, ethBalance] = await Promise.all([
-    usdc.decimals(),
-    usdc.balanceOf(from),
-    usdc.allowance(from, L1_ADAPTER),
-    provider.getBalance(from),
-  ]);
+  const [decimals, balance, allowance, ethBalance] = await withRetry(
+    () =>
+      Promise.all([
+        usdc.decimals(),
+        usdc.balanceOf(from),
+        usdc.allowance(from, L1_ADAPTER),
+        provider.getBalance(from),
+      ]),
+    { label: 'reading balances' }
+  );
 
   const amount = ethers.parseUnits(String(amountArg), decimals);
 
