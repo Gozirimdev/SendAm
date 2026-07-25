@@ -141,6 +141,19 @@ use.
 
 ### Setup
 
+**Run `create-gas-wallet.js` where the real `ENCRYPTION_KEY` is set** — on the
+server, or locally with production env loaded. It writes a wallet whose private
+key is encrypted with that key; created under the wrong one, production can
+never decrypt it and anything you fund it with is stranded. A local `.env` that
+has `DATABASE_URL` but not `ENCRYPTION_KEY` makes this easy to do by accident,
+so the script refuses to run unless it can decrypt an existing wallet first.
+
+Check what is and isn't configured at any time:
+
+```bash
+curl https://<your-api-host>/health/features
+```
+
 The treasury defaults to the gas wallet, so if you already ran
 `create-gas-wallet.js` there is nothing new to create — just put USDC.e in it:
 
