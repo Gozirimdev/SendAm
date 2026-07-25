@@ -103,3 +103,28 @@ test('formatWalletBalance lists tokens with naira and a total, omitting naira wh
 test('formatWalletBalance reports an empty wallet clearly', () => {
   assert.match(formatWalletBalance([]), /empty/i);
 });
+
+// --- testnet funding command ---
+// A miss here doesn't fail loudly, it just falls through to the generic help
+// reply, so the phrasings need coverage of their own.
+const { matchesFundRequest } = require('../src/whatsapp/assistant.service');
+
+test('recognises the ways people ask for test funds', () => {
+  for (const phrase of [
+    'fund me', 'Fund Me', '  fund me  ', 'faucet', 'test funds', 'testnet funds',
+    'get usdc', 'request usdc', 'need usdc', 'top up', 'topup',
+    'please fund my wallet', 'can you fund my account', 'send me test usdc',
+    'i need test funds', 'top up my wallet',
+  ]) {
+    assert.equal(matchesFundRequest(phrase), true, `did not match: "${phrase}"`);
+  }
+});
+
+test('does not mistake a real payment for a funding request', () => {
+  for (const phrase of [
+    'send 5 to 08012345678', 'balance', 'my address', 'help',
+    'send 100 usdc to mum', 'what is my balance', 'receive', '',
+  ]) {
+    assert.equal(matchesFundRequest(phrase), false, `wrongly matched: "${phrase}"`);
+  }
+});
