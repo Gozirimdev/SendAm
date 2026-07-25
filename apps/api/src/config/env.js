@@ -26,6 +26,20 @@ module.exports = {
     // Meta App Secret, used to verify the X-Hub-Signature-256 header on
     // inbound webhook POSTs so forged events can't drive money movement.
     appSecret: process.env.WHATSAPP_APP_SECRET,
+    // Published WhatsApp Flow that collects the payment PIN in an encrypted
+    // native form instead of a chat message. See docs/whatsapp-pin-flow.md.
+    pinFlowId: process.env.WHATSAPP_PIN_FLOW_ID,
+    // RSA private key whose public half is uploaded to Meta. Accepts either a
+    // real multi-line PEM or the \n-escaped single-line form that most hosting
+    // dashboards force on you.
+    flowPrivateKey: (process.env.WHATSAPP_FLOW_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    flowPrivateKeyPassphrase: process.env.WHATSAPP_FLOW_PRIVATE_KEY_PASSPHRASE,
+    // Fallback that accepts a PIN typed directly into the chat thread, where
+    // it is stored permanently in both parties' message history. Automatically
+    // bypassed whenever the Flow above is configured; set to 'false' to refuse
+    // in-chat PINs outright even when no Flow exists (sends then can't be
+    // confirmed at all, which is the safe failure).
+    allowInChatPin: process.env.ALLOW_IN_CHAT_PIN !== 'false',
   },
   // Per-user transfer guardrails. Amounts are in TOKEN. Defaults are sane for a
   // testnet MVP; tighten via env before handling real value.
@@ -153,6 +167,16 @@ module.exports = {
       secretKey: process.env.DOJAH_SECRET_KEY,
     },
     pinPepper: process.env.PIN_PEPPER,
+    // Wrong-PIN attempts allowed against a single pending payment before it is
+    // cancelled outright.
+    maxPinAttempts: Number(process.env.MAX_PIN_ATTEMPTS || 3),
+    // KYC tier granted when a user completes browser onboarding (terms + PIN).
+    // Tier 0 carries {daily: 0, single: 0} limits, so leaving a user there
+    // blocks every payment they ever attempt — which is what the send flow did
+    // before. Set to 0 to require a real KYC provider decision before any
+    // payment is allowed; the MVP default of 1 treats "accepted terms and set
+    // a PIN" as sufficient for tier-1 limits.
+    onboardingKycTier: Number(process.env.ONBOARDING_KYC_TIER ?? 1),
   },
   voice: {
     provider: process.env.VOICE_PROVIDER || 'deepgram',
