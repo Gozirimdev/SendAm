@@ -111,9 +111,21 @@ module.exports = {
     escrowContractAddress: process.env.LISK_ESCROW_CONTRACT_ADDRESS,
     usdcContractAddress: process.env.LISK_USDC_CONTRACT_ADDRESS,
     explorerBaseUrl: process.env.LISK_EXPLORER_BASE_URL,
+    // The chain's native (gas) currency. Lisk is an OP Stack L2, so this is
+    // ETH — LSK itself lives on the chain as an ordinary ERC-20. Overridable
+    // only so a fork with a custom gas token doesn't need a code change.
+    nativeSymbol: process.env.LISK_NATIVE_SYMBOL || 'ETH',
     // A funded, self-custodied Wallet row (see lisk.reader.js) that pays
-    // gas top-ups planned by sendam-paymaster into user wallets.
+    // gas top-ups into user wallets. Create one with
+    // scripts/create-gas-wallet.js. Enough on its own — sendam-paymaster is
+    // optional (see payment/gasTopup.js).
     gasWalletAddress: process.env.LISK_GAS_WALLET_ADDRESS,
+    // Local gas policy, used when sendam-paymaster isn't configured. A USDC
+    // transfer here costs roughly 0.0000001 ETH, so the defaults are ~500
+    // transfers as the floor and ~2000 as the refill target — small enough
+    // that a single faucet claim funds the treasury for a long time.
+    gasMinBalance: process.env.LISK_GAS_MIN_BALANCE || '0.00005',
+    gasTopUpTo: process.env.LISK_GAS_TOPUP_TO || '0.0002',
   },
   // sendam-paymaster: private HTTP microservice that plans (never submits)
   // gas/fee sponsorship. Same x-sendam-signature HMAC contract as sendam-ai.
