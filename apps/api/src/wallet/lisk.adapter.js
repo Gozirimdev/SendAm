@@ -352,6 +352,11 @@ module.exports = {
   getNativeBalance,
   getTokenBalances,
   preflightTransfer,
+  // The effective chain id, with LISK_CHAIN_ID's non-numeric default ('lisk')
+  // already resolved to the testnet fallback. Exported so callers that gate on
+  // which network they're talking to read the same value the RPC calls use,
+  // rather than re-deriving it from raw config and disagreeing.
+  resolvedChainId,
   sendToken,
   sendNative,
   checkHealth,
