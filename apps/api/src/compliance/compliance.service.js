@@ -9,17 +9,35 @@ const tierLimits = {
 };
 
 const getOrCreateKycProfile = async (user) => {
+  const userTier = Number(user.kycTier || 0);
   let profile = await prisma.kycProfile.findUnique({ where: { userId: user.id } });
+
   if (!profile) {
     profile = await prisma.kycProfile.create({
       data: {
         userId: user.id,
         provider: config.compliance.provider,
-        tier: user.kycTier || 0,
-        status: user.kycTier > 0 ? 'approved' : 'not_started',
+        tier: userTier,
+        status: userTier > 0 ? 'approved' : 'not_started',
       },
     });
+    return profile;
   }
+
+  // The User row is the source of truth for tier — onboarding raises it (see
+  // onboarding.service.js#provisionWallet). Without this reconciliation a
+  // profile created earlier at tier 0 pins the user there permanently, and
+  // every payment they attempt fails the `status !== 'approved'` check below.
+  // That is exactly what happened to anyone whose first send attempt predated
+  // their wallet: the tier-0 profile created by that attempt outlived it.
+  // Only ever raises a tier here; downgrades stay a deliberate admin action.
+  if (userTier > profile.tier) {
+    profile = await prisma.kycProfile.update({
+      where: { userId: user.id },
+      data: { tier: userTier, status: 'approved' },
+    });
+  }
+
   return profile;
 };
 

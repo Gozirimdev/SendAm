@@ -19,6 +19,8 @@ const config = require('./config/env');
 const logger = require('./utils/logger');
 const prisma = require('./common/prisma');
 const liskAdapter = require('./wallet/lisk.adapter');
+const whatsappService = require('./services/whatsapp.service');
+const flowCrypto = require('./whatsapp/flow.crypto');
 
 const app = express();
 
@@ -81,6 +83,20 @@ app.get('/health', async (req, res) => {
 app.get('/health/lisk', async (req, res) => {
   const result = await liskAdapter.checkHealth();
   res.status(result.ok ? 200 : 503).json(result);
+});
+
+// WhatsApp credential health. An unset or expired WHATSAPP_TOKEN makes every
+// outbound reply vanish silently — the send path swallows API errors so a
+// webhook is never failed — which is indistinguishable from the bot ignoring
+// the user. This tells the two apart without shell access. Also reports whether
+// the encrypted PIN Flow is configured, since without it PINs fall back to
+// being typed into the chat thread. No secrets are returned.
+app.get('/health/whatsapp', async (req, res) => {
+  const result = await whatsappService.checkHealth();
+  res.status(result.ok ? 200 : 503).json({
+    ...result,
+    pinFlow: flowCrypto.configured() ? 'configured' : 'not configured (PINs fall back to chat messages)',
+  });
 });
 
 // Routes

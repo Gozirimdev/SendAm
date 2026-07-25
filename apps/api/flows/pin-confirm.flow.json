@@ -1,0 +1,92 @@
+{
+  "version": "7.1",
+  "data_api_version": "3.0",
+  "routing_model": {
+    "CONFIRM_PIN": ["SUCCESS"],
+    "SUCCESS": []
+  },
+  "screens": [
+    {
+      "id": "CONFIRM_PIN",
+      "title": "Confirm payment",
+      "data": {
+        "summary": {
+          "type": "string",
+          "__example__": "5 USDC to 08012345678"
+        },
+        "error_message": {
+          "type": "string",
+          "__example__": " "
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "${data.summary}"
+          },
+          {
+            "type": "TextBody",
+            "text": "Enter your SendAm PIN to authorise this payment. Your PIN is encrypted and is never shown in the chat."
+          },
+          {
+            "type": "Form",
+            "name": "pin_form",
+            "children": [
+              {
+                "type": "TextInput",
+                "name": "pin",
+                "label": "PIN",
+                "input-type": "passcode",
+                "required": true,
+                "min-chars": 4,
+                "max-chars": 6,
+                "helper-text": "${data.error_message}"
+              },
+              {
+                "type": "Footer",
+                "label": "Confirm payment",
+                "on-click-action": {
+                  "name": "data_exchange",
+                  "payload": {
+                    "pin": "${form.pin}"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "SUCCESS",
+      "title": "Done",
+      "terminal": true,
+      "success": true,
+      "data": {
+        "result_message": {
+          "type": "string",
+          "__example__": "Sent 5 USDC to 08012345678."
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextBody",
+            "text": "${data.result_message}"
+          },
+          {
+            "type": "Footer",
+            "label": "Done",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {}
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

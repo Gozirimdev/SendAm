@@ -42,6 +42,18 @@ test('getBalance without LISK_RPC_URL configured fails loudly instead of silentl
   const originalRpcUrl = process.env.LISK_RPC_URL;
   delete process.env.LISK_RPC_URL;
   try {
+    // Deleting the env var isn't enough: re-requiring config/env re-runs
+    // dotenv.config(), which repopulates LISK_RPC_URL straight back out of a
+    // local .env file. Stub the resolved config instead, so this asserts the
+    // adapter's behaviour rather than the developer's .env contents.
+    const configPath = require.resolve('../src/config/env');
+    const realConfig = require(configPath);
+    require.cache[configPath] = {
+      id: configPath,
+      filename: configPath,
+      loaded: true,
+      exports: { ...realConfig, lisk: { ...realConfig.lisk, rpcUrl: undefined } },
+    };
     const freshAdapter = require('../src/wallet/lisk.adapter');
     await assert.rejects(
       () => freshAdapter.getBalance({ address: '0x1111111111111111111111111111111111111111', tokenAddress: '0x2222222222222222222222222222222222222222' }),
