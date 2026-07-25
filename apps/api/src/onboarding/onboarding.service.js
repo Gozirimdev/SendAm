@@ -2,6 +2,7 @@ const prisma = require('../common/prisma');
 const walletService = require('../wallet/account.service');
 const { sendTextMessage } = require('../services/whatsapp.service');
 const { hashPin } = require('../compliance/pin.service');
+const config = require('../config/env');
 
 // Looks up the user a registration token belongs to, without mutating
 // anything — used by the GET the browser form makes on load to prefill the
@@ -59,8 +60,30 @@ const provisionWallet = async ({ token }) => {
     data: {
       registrationToken: null,
       registrationTokenExpiresAt: null,
+      // Grant the onboarding tier. Tier 0 carries {daily: 0, single: 0}
+      // limits, so a user left there can never complete a payment — which is
+      // how every first send used to fail. See config.compliance.onboardingKycTier
+      // for the policy knob and its caveat.
+      ...(config.compliance.onboardingKycTier > (user.kycTier || 0)
+        ? { kycTier: config.compliance.onboardingKycTier }
+        : {}),
     },
   });
+
+  // Keep the KYC profile in step with the tier we just granted, including for
+  // users who already had a tier-0 profile from an earlier failed send.
+  if (config.compliance.onboardingKycTier > 0) {
+    await prisma.kycProfile.upsert({
+      where: { userId: updated.id },
+      create: {
+        userId: updated.id,
+        provider: config.compliance.provider,
+        tier: config.compliance.onboardingKycTier,
+        status: 'approved',
+      },
+      update: { tier: config.compliance.onboardingKycTier, status: 'approved' },
+    });
+  }
 
   const wallet = await walletService.createOrGetWallet({ user: updated });
   const hasPasskey = Boolean(await prisma.webauthnCredential.findFirst({ where: { userId: updated.id } }));
