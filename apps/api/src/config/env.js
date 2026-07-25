@@ -126,6 +126,9 @@ module.exports = {
     // that a single faucet claim funds the treasury for a long time.
     gasMinBalance: process.env.LISK_GAS_MIN_BALANCE || '0.00005',
     gasTopUpTo: process.env.LISK_GAS_TOPUP_TO || '0.0002',
+    // Treasury the in-chat testnet faucet drips USDC.e from. Defaults to the
+    // gas wallet, so one funded system wallet covers both jobs.
+    faucetWalletAddress: process.env.LISK_FAUCET_WALLET_ADDRESS,
   },
   // sendam-paymaster: private HTTP microservice that plans (never submits)
   // gas/fee sponsorship. Same x-sendam-signature HMAC contract as sendam-ai.
@@ -144,6 +147,19 @@ module.exports = {
     // The ledger account fee revenue from executed on-chain sends is
     // recorded against, purely for internal reconciliation — not a real user.
     treasuryUserId: process.env.SETTLEMENT_TREASURY_USER_ID || 'treasury',
+  },
+  // In-chat testnet funding ("fund me"). Users cannot fund their own wallets:
+  // the keys are generated and held encrypted by this backend, so the usual
+  // faucet-then-bridge errand isn't open to them. This closes that gap.
+  //
+  // Hard-gated to testnet chain ids in testnetFaucet.service.js regardless of
+  // this flag — on mainnet it would be an open drain on real funds for anyone
+  // able to send a WhatsApp message.
+  faucet: {
+    enabled: process.env.TESTNET_FAUCET_ENABLED !== 'false',
+    amount: process.env.TESTNET_FAUCET_AMOUNT || '10',
+    cooldownHours: Number(process.env.TESTNET_FAUCET_COOLDOWN_HOURS || 24),
+    maxPerUser: Number(process.env.TESTNET_FAUCET_MAX_PER_USER || 5),
   },
   stellar: {
     network: process.env.STELLAR_NETWORK || 'testnet',
