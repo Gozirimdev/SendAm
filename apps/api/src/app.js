@@ -21,6 +21,7 @@ const prisma = require('./common/prisma');
 const liskAdapter = require('./wallet/lisk.reader');
 const whatsappService = require('./services/whatsapp.service');
 const flowCrypto = require('./whatsapp/flow.crypto');
+const featureReadiness = require('./common/featureReadiness');
 
 const app = express();
 
@@ -83,6 +84,16 @@ app.get('/health', async (req, res) => {
 app.get('/health/lisk', async (req, res) => {
   const result = await liskAdapter.checkHealth();
   res.status(result.ok ? 200 : 503).json(result);
+});
+
+// Which user-facing features are actually configured, and the exact env var to
+// set for each one that isn't. These all degrade quietly by design, so without
+// this the first signal that something is switched off is a user being told a
+// feature is unavailable. No secrets are returned — only whether values are
+// present, and public addresses. 200 always: an unconfigured optional feature
+// is not an unhealthy service.
+app.get('/health/features', (req, res) => {
+  res.status(200).json(featureReadiness.readiness());
 });
 
 // WhatsApp credential health. An unset or expired WHATSAPP_TOKEN makes every

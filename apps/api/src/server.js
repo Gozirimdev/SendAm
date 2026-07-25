@@ -4,10 +4,14 @@ const connectDB = require('./config/db');
 const prisma = require('./common/prisma');
 const logger = require('./utils/logger');
 const { registerJobs } = require('./jobs');
+const { logReadiness } = require('./common/featureReadiness');
 
 const startServer = async () => {
   await connectDB();
   registerJobs();
+  // Say at boot which features are switched off and why, rather than letting a
+  // user discover it by being told something is unavailable.
+  logReadiness(logger);
 
   const server = app.listen(config.port, () => {
     logger.info(`Server running in ${config.env} mode on port ${config.port}`);
