@@ -87,14 +87,16 @@ const withStubbedFetch = async (impl, fn) => {
 
 const jsonResponse = (body) => ({ status: 200, text: async () => JSON.stringify(body) });
 
-test('getTokenBalances lists native LSK first, then non-zero ERC-20s, filtering scam and non-ERC-20', async () => {
+test('getTokenBalances lists the native coin first, then non-zero ERC-20s, filtering scam and non-ERC-20', async () => {
   const result = await withStubbedFetch(
     async (url) => (url.includes('/token-balances') ? jsonResponse(TOKEN_BALANCES_FIXTURE) : jsonResponse(ACCOUNT_FIXTURE)),
     () => liskAdapter.getTokenBalances({ address: '0x1111111111111111111111111111111111111111' })
   );
 
   assert.equal(result.length, 2);
-  assert.equal(result[0].symbol, 'LSK');
+  // The native coin on this OP Stack L2 is ETH, not LSK — LSK itself is an
+  // ordinary ERC-20 here and arrives through the token list.
+  assert.equal(result[0].symbol, 'ETH');
   assert.equal(result[0].native, true);
   assert.equal(result[0].amount, '3.0');
   assert.equal(result[1].symbol, 'USDC');

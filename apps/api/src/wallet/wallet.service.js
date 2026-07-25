@@ -77,6 +77,18 @@ const tokenBalances = async ({ wallet, limit }) => {
   return provider().getTokenBalances({ address: wallet.address || wallet.publicKey, limit });
 };
 
+// Confirms a transfer can actually succeed before it is submitted — separately
+// checking the token balance and the native balance that pays for gas. Only
+// the Lisk adapter implements this; provider() is hardcoded to lisk.
+const preflightSend = async ({ wallet, destination, amount, tokenAddress }) => {
+  return provider().preflightTransfer({
+    fromAddress: wallet.address || wallet.publicKey,
+    destination,
+    amount,
+    tokenAddress,
+  });
+};
+
 const sendToken = async ({ wallet, chain, destination, amount, tokenAddress }) => {
   return provider().sendToken({
     chain,
@@ -101,6 +113,7 @@ module.exports = {
   getWalletByPhoneNumber,
   balance,
   tokenBalances,
+  preflightSend,
   sendToken,
   transactionHistory,
 };

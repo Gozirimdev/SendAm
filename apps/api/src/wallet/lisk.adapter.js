@@ -158,11 +158,78 @@ const checkHealth = async () => {
   return result;
 };
 
-// Native LSK balance, in wei — used by the payment orchestrator to decide
-// whether the sending wallet needs a gas top-up before a token transfer.
+// Native balance, in wei — used by the payment orchestrator to decide whether
+// the sending wallet needs a gas top-up before a token transfer.
+//
+// The gas token here is ETH, not LSK. Lisk is an OP Stack L2, so it inherits
+// L1's native currency: the WETH9 predeploy at 0x42..06 reports "Wrapped
+// Ether", and LSK itself exists on the chain as ordinary ERC-20 contracts.
+// This was previously labelled LSK throughout, which showed users an ETH
+// balance under an LSK ticker and sent anyone topping up a gas wallet after
+// the wrong asset.
 const getNativeBalance = async ({ address }) => {
   const raw = await provider().getBalance(address);
   return { value: ethers.formatEther(raw), raw: raw.toString() };
+};
+
+// Everything that must hold for a token transfer to succeed, checked before
+// submitting one. Without this the only signal is a post-hoc revert string:
+// "ERC20: transfer amount exceeds balance" (no USDC) and "insufficient funds
+// for intrinsic transaction cost" (no ETH for gas) are completely different
+// problems for the user, and both used to surface as one vague "not enough
+// money" message. Checking up front also avoids recording a failed
+// transaction row for something we could see coming.
+//
+// Returns { ok: true } or { ok: false, reason, have, need, symbol }.
+const preflightTransfer = async ({ fromAddress, destination, amount, tokenAddress = config.lisk.usdcContractAddress }) => {
+  if (!tokenAddress) throw new Error('Token contract address is required for a Lisk token transfer.');
+
+  const token = new ethers.Contract(tokenAddress, ERC20_ABI, provider());
+  const [decimals, tokenRaw, nativeRaw, feeData] = await withRetry(() =>
+    Promise.all([
+      token.decimals(),
+      token.balanceOf(fromAddress),
+      provider().getBalance(fromAddress),
+      provider().getFeeData(),
+    ])
+  );
+
+  const needed = ethers.parseUnits(String(amount), decimals);
+  if (tokenRaw < needed) {
+    return {
+      ok: false,
+      reason: 'insufficient_token',
+      have: ethers.formatUnits(tokenRaw, decimals),
+      need: String(amount),
+      symbol: 'USDC',
+    };
+  }
+
+  // estimateGas covers L2 execution only; OP Stack also charges an L1 data
+  // fee. Both are tiny (~1e-7 ETH combined at current prices), so rather than
+  // query the L1 oracle we apply a generous multiplier — being wrong here in
+  // the cautious direction costs the user nothing.
+  let gasUnits = 100_000n;
+  try {
+    gasUnits = await token.transfer.estimateGas(destination, needed, { from: fromAddress });
+  } catch (_) {
+    // Estimation can revert for reasons we've already ruled out above; fall
+    // back to a safe ceiling rather than blocking the send on it.
+  }
+  const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || 0n;
+  const gasCost = gasUnits * gasPrice * 3n;
+
+  if (nativeRaw < gasCost) {
+    return {
+      ok: false,
+      reason: 'insufficient_gas',
+      have: ethers.formatEther(nativeRaw),
+      need: ethers.formatEther(gasCost),
+      symbol: 'ETH',
+    };
+  }
+
+  return { ok: true };
 };
 
 // GETs JSON from the Blockscout explorer, guarding against a non-JSON body the
@@ -229,8 +296,11 @@ const getTokenBalances = async ({ address, limit = 10 }) => {
   const balances = [];
   if (nativeRaw && nativeRaw !== '0' && hasVisibleAmount(ethers.formatEther(nativeRaw))) {
     balances.push({
-      symbol: 'LSK',
-      name: 'Lisk',
+      // coin_balance is the chain's native currency, which on an OP Stack L2
+      // is ETH — not LSK. LSK trades on Lisk as an ordinary ERC-20 and so
+      // arrives through the token list above, like any other holding.
+      symbol: config.lisk.nativeSymbol,
+      name: 'Ether',
       address: null,
       decimals: 18,
       amount: ethers.formatEther(nativeRaw),
@@ -281,6 +351,7 @@ module.exports = {
   getBalance,
   getNativeBalance,
   getTokenBalances,
+  preflightTransfer,
   sendToken,
   sendNative,
   checkHealth,
