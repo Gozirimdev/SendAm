@@ -106,14 +106,17 @@ test('provisionWallet rejects when step 1 (terms/PIN) is not complete', async ()
 test('provisionWallet creates the wallet, burns the token, and sends a WhatsApp confirmation mentioning the PIN/passkey', async () => {
   const setupUser = { ...activeUser, termsAcceptedAt: new Date(), pinHash: 'hashed', preferredName: 'Ada' };
   let sentMessage;
+  let kycUpsert;
+  let userUpdate;
   await withStubs(
     {
       prismaStub: {
         user: {
           findUnique: async () => setupUser,
-          update: async (args) => ({ ...setupUser, ...args.data }),
+          update: async (args) => { userUpdate = args; return { ...setupUser, ...args.data }; },
         },
         webauthnCredential: { findFirst: async () => ({ id: 'cred-1' }) },
+        kycProfile: { upsert: async (args) => { kycUpsert = args; return args.create; } },
       },
       walletServiceStub: { createOrGetWallet: async () => ({ address: '0xabc' }) },
       sendTextMessageStub: async (phoneNumber, message) => { sentMessage = { phoneNumber, message }; },
@@ -124,6 +127,12 @@ test('provisionWallet creates the wallet, burns the token, and sends a WhatsApp 
       assert.equal(sentMessage.phoneNumber, '+2348000000000');
       assert.match(sentMessage.message, /0xabc/);
       assert.match(sentMessage.message, /passkey enabled/);
+      // Onboarding must lift the user off tier 0. Tier 0 carries
+      // {daily: 0, single: 0} limits, so a user left there fails every
+      // payment they ever attempt.
+      assert.equal(userUpdate.data.kycTier, 1);
+      assert.equal(kycUpsert.update.status, 'approved');
+      assert.equal(kycUpsert.update.tier, 1);
     },
   );
 });
@@ -139,6 +148,7 @@ test('provisionWallet omits "passkey enabled" when no credential was registered'
           update: async (args) => ({ ...setupUser, ...args.data }),
         },
         webauthnCredential: { findFirst: async () => null },
+        kycProfile: { upsert: async () => ({}) },
       },
       walletServiceStub: { createOrGetWallet: async () => ({ address: '0xabc' }) },
       sendTextMessageStub: async (phoneNumber, message) => { sentMessage = { phoneNumber, message }; },

@@ -1,17 +1,17 @@
 const crypto = require('crypto');
 const walletService = require('../wallet/wallet.service');
-const { executePayment } = require('../payment/payment.orchestrator');
 const { tokenToNaira } = require('../pricing/pricing.service');
-const { enforceTransactionPolicy } = require('../compliance/compliance.service');
-const { verifyPin } = require('../compliance/pin.service');
 const { sendTextMessage } = require('../services/whatsapp.service');
 const prisma = require('../common/prisma');
 const logger = require('../utils/logger');
 const sendamAi = require('../sendamAi/sendamAi.client');
 const config = require('../config/env');
 const { writeAuditLog } = require('../common/audit.service');
+const { isValidPin } = require('../utils/validators');
+const { resolveDestination, describeFailure } = require('./recipient.service');
+const { confirmPendingSend, clearPendingSend, isExpired } = require('./send.service');
+const pinFlow = require('./pinFlow.service');
 
-const PENDING_SEND_TTL_MS = 10 * 60 * 1000;
 // Matches sendam-ai's default flow token TTL (15 min) — no point outliving
 // the token we'd be resuming.
 const PENDING_FLOW_TTL_MS = 15 * 60 * 1000;
@@ -233,17 +233,38 @@ const handleGetStartedReply = async ({ phoneNumber, user, text }) => {
   return true;
 };
 
-const resolveRecipient = async (user, recipient) => {
-  const alias = String(recipient || '').trim().toLowerCase();
-  const savedAlias = await prisma.alias.findUnique({
-    where: { userId_alias: { userId: user.id, alias } },
-  });
-  if (savedAlias) return { destination: savedAlias.target, label: alias };
-  return { destination: recipient, label: recipient };
-};
+const CANCEL_WORDS = ['no', 'cancel', 'stop', 'abort', 'nevermind', 'never mind'];
 
+// Everything that must be true before a user can be asked to authorise a
+// payment. Each failure used to surface either as silence (an unhandled throw
+// after the PIN was accepted) or as an unexplained "PIN verification failed"
+// loop; now each one is answered before any PIN is requested.
 const requestConfirmation = async ({ phoneNumber, user, intent }) => {
-  const recipient = await resolveRecipient(user, intent.recipient);
+  const recipient = await resolveDestination({ user, recipient: intent.recipient });
+  if (!recipient.ok) {
+    await sendTextMessage(phoneNumber, describeFailure(recipient));
+    return;
+  }
+
+  // A user with no PIN can never pass verification, so asking for one just
+  // loops them. Point them at onboarding instead.
+  if (!user.pinHash) {
+    await sendTextMessage(
+      phoneNumber,
+      "Before you can send money you'll need to finish setting up your wallet and payment PIN. Reply \"setup\" and I'll send you the link."
+    );
+    return;
+  }
+
+  const wallet = await prisma.wallet.findUnique({ where: { userId: user.id } });
+  if (!wallet?.address) {
+    await sendTextMessage(
+      phoneNumber,
+      "You don't have a SendAm wallet yet. Reply \"setup\" and I'll send you the link to create one."
+    );
+    return;
+  }
+
   const pendingSend = {
     amount: intent.amount,
     asset: intent.asset,
@@ -251,59 +272,87 @@ const requestConfirmation = async ({ phoneNumber, user, intent }) => {
     alias: recipient.label,
     routeType: 'domestic',
     requestedAt: new Date(),
+    // Server-minted, unguessable, and scoped to this one payment: the only
+    // credential the Flow endpoint trusts to identify the payer.
+    flowToken: pinFlow.newFlowToken(),
+    pinAttempts: 0,
+    // Which surface actually asked for the PIN. Recorded rather than inferred
+    // from config, because the Flow can be configured and still fail to send
+    // (an expired token, a Meta outage) — in which case we fall back to chat
+    // and must not later tell the user to tap a button that never arrived.
+    pinSurface: 'chat',
   };
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { pendingSend },
-  });
+  await prisma.user.update({ where: { id: user.id }, data: { pendingSend } });
 
+  // Preferred path: PIN entered in an encrypted native form, never in the chat.
+  if (await pinFlow.sendPinFlow({ phoneNumber, pending: pendingSend })) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { pendingSend: { ...pendingSend, pinSurface: 'flow' } },
+    });
+    return;
+  }
+
+  if (!config.whatsapp.allowInChatPin) {
+    await clearPendingSend(user.id);
+    await sendTextMessage(
+      phoneNumber,
+      "I can't take payment PINs securely right now, so I haven't started that payment. Please try again shortly."
+    );
+    logger.error('Refused a send: no PIN Flow configured and ALLOW_IN_CHAT_PIN=false.');
+    return;
+  }
+
+  logger.warn(
+    'Falling back to an in-chat PIN prompt — the PIN will be stored in the user\'s WhatsApp history. Configure WHATSAPP_PIN_FLOW_ID and WHATSAPP_FLOW_PRIVATE_KEY.'
+  );
   await sendTextMessage(
     phoneNumber,
-    `Please confirm this payment:\nAmount: ${intent.amount} ${intent.asset}\nTo: ${recipient.label}\nReply with your PIN to send, or "no" to cancel.`
+    `Please confirm this payment:\nAmount: ${intent.amount} ${intent.asset}\nTo: ${recipient.label}\n\nReply with your PIN to send, or "no" to cancel.\n⚠️ Delete your PIN message afterwards — it stays in this chat.`
   );
 };
 
 const handlePendingPin = async ({ phoneNumber, user, text }) => {
-  if (!user.pendingSend?.destination) return false;
+  const pending = user.pendingSend;
+  if (!pending?.destination) return false;
 
-  const lowered = String(text).trim().toLowerCase();
-  if (lowered === 'no' || lowered === 'cancel') {
-    await prisma.user.update({ where: { id: user.id }, data: { pendingSend: null } });
+  const trimmed = String(text ?? '').trim();
+
+  if (CANCEL_WORDS.includes(trimmed.toLowerCase())) {
+    await clearPendingSend(user.id);
     await sendTextMessage(phoneNumber, 'Payment cancelled.');
     return true;
   }
 
-  if (Date.now() - new Date(user.pendingSend.requestedAt).getTime() > PENDING_SEND_TTL_MS) {
-    await prisma.user.update({ where: { id: user.id }, data: { pendingSend: null } });
-    await sendTextMessage(phoneNumber, 'That payment request expired. Please start again.');
+  if (isExpired(pending)) {
+    await clearPendingSend(user.id);
+    await sendTextMessage(phoneNumber, 'That payment request expired, so nothing was sent. Please start again.');
     return true;
   }
 
-  const userWithPin = await prisma.user.findUnique({ where: { id: user.id } });
-  if (!verifyPin(text, userWithPin.pinHash)) {
-    await sendTextMessage(phoneNumber, 'PIN verification failed. Please try again or reply "no" to cancel.');
+  // When this payment was sent as a Flow the PIN arrives over the encrypted
+  // endpoint, never as a message. Anything typed here is a mistake — and must
+  // not be treated as a PIN attempt, or a user who types their PIN out of
+  // habit would have it sitting in the chat *and* burn an attempt.
+  if (pending.pinSurface === 'flow') {
+    await sendTextMessage(
+      phoneNumber,
+      'Tap "Confirm payment" on the message above to enter your PIN securely — please don\'t type it here. Reply "no" to cancel.'
+    );
     return true;
   }
 
-  const pending = user.pendingSend;
-  await enforceTransactionPolicy({
-    user,
-    amount: pending.amount,
-    routeType: pending.routeType,
-    destinationCountry: 'NG',
-  });
+  // In-chat fallback. Ignore obvious non-PINs rather than spending an attempt.
+  if (!isValidPin(trimmed)) {
+    await sendTextMessage(
+      phoneNumber,
+      'Your PIN is 4 to 6 digits. Reply with it to confirm the payment, or "no" to cancel.'
+    );
+    return true;
+  }
 
-  const result = await executePayment({
-    sender: user,
-    destination: pending.destination,
-    amount: pending.amount,
-    asset: pending.asset || 'USDC',
-    routeType: pending.routeType,
-  });
-
-  await prisma.user.update({ where: { id: user.id }, data: { pendingSend: null } });
-
-  await sendTextMessage(phoneNumber, `Payment ${result.transaction.status}. Receipt: ${result.receipt.transactionId}`);
+  const result = await confirmPendingSend({ user, pin: trimmed });
+  await sendTextMessage(phoneNumber, result.message);
   return true;
 };
 
@@ -314,6 +363,14 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
   if (await handleGetStartedReply({ phoneNumber, user, text })) return;
 
   const normalized = String(text || '').trim().toLowerCase();
+
+  // The escape hatches every "you need to finish setup" reply points at.
+  // Without these the user is told to reply "setup"/"verify" and gets the
+  // generic help line back.
+  if (['setup', 'set up', 'verify', 'onboard', 'register'].includes(normalized)) {
+    await sendRegistrationLink({ phoneNumber, user });
+    return;
+  }
 
   // 'hi'/'hello' deliberately fall through to sendam-ai below instead of a
   // static reply here — GREETING now gets a tone-matched response instead of
