@@ -101,6 +101,71 @@ test('an unrecognised execution failure still produces a safe reply', async () =
   assert.doesNotMatch(result.message, /rpc\.internal|ECONNREFUSED/);
 });
 
+// "No USDC to send" and "no ETH to pay gas with" need completely different
+// actions from the user. On-chain they are only distinguishable by a revert
+// string after the fact, so the orchestrator's preflight labels them and these
+// must never collapse into one message.
+test('an empty token balance and an empty gas balance produce different messages', async () => {
+  const user = buildUser();
+
+  const tokenSvc = loadSendService({
+    prismaStub: prismaFor(user),
+    executePaymentStub: async () => {
+      throw new Error('INSUFFICIENT_TOKEN_BALANCE: wallet holds 0.0 USDC, needs 5 USDC');
+    },
+  });
+  const tokenResult = await tokenSvc.confirmPendingSend({ user, pin: '1234' });
+
+  const gasSvc = loadSendService({
+    prismaStub: prismaFor(user),
+    executePaymentStub: async () => {
+      throw new Error('INSUFFICIENT_GAS_BALANCE: wallet holds 0.0 ETH, needs 0.0000001 ETH');
+    },
+  });
+  const gasResult = await gasSvc.confirmPendingSend({ user, pin: '1234' });
+
+  assert.notEqual(tokenResult.message, gasResult.message);
+
+  // The token message names the asset and quotes the user's own figures.
+  assert.match(tokenResult.message, /USDC/);
+  assert.match(tokenResult.message, /holds 0\.0/);
+  assert.match(tokenResult.message, /5/);
+
+  // The gas message names the gas token and must not tell the user to add USDC.
+  assert.match(gasResult.message, /ETH/);
+  assert.match(gasResult.message, /network fee/);
+  assert.doesNotMatch(gasResult.message, /LSK/);
+
+  // Neither leaks the internal error code.
+  assert.doesNotMatch(tokenResult.message, /INSUFFICIENT_/);
+  assert.doesNotMatch(gasResult.message, /INSUFFICIENT_/);
+});
+
+// Balances can change between the preflight and the send, so the raw revert
+// strings still need distinct handling.
+test('post-preflight revert strings are still told apart', async () => {
+  const user = buildUser();
+
+  const gasSvc = loadSendService({
+    prismaStub: prismaFor(user),
+    executePaymentStub: async () => {
+      throw new Error('insufficient funds for intrinsic transaction cost');
+    },
+  });
+  const gasResult = await gasSvc.confirmPendingSend({ user, pin: '1234' });
+  assert.match(gasResult.message, /network fee/);
+
+  const tokenSvc = loadSendService({
+    prismaStub: prismaFor(user),
+    executePaymentStub: async () => {
+      throw new Error('execution reverted: ERC20: transfer amount exceeds balance');
+    },
+  });
+  const tokenResult = await tokenSvc.confirmPendingSend({ user, pin: '1234' });
+  assert.doesNotMatch(tokenResult.message, /network fee/);
+  assert.match(tokenResult.message, /Nothing was sent/);
+});
+
 test('a wrong PIN burns an attempt and reports the tries left', async () => {
   const user = buildUser();
   const sink = {};
