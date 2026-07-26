@@ -7,7 +7,6 @@ module.exports = {
   env,
   isProduction: env === 'production',
   databaseUrl: process.env.DATABASE_URL,
-  encryptionKey: process.env.SERVICE_SECRET,
   // Comma-separated list of origins allowed to call the REST API. Empty means
   // "no allowlist configured" — see app.js for the dev/prod behaviour.
   corsOrigins: (process.env.CORS_ORIGINS || '')
@@ -41,7 +40,7 @@ module.exports = {
     // confirmed at all, which is the safe failure).
     allowInChatPin: process.env.ALLOW_IN_CHAT_PIN !== 'false',
   },
-  // Per-user transfer guardrails. Amounts are in TOKEN. Defaults are sane for a
+  // Per-user transfer guardrails. Amounts are in USDC. Defaults are sane for a
   // testnet MVP; tighten via env before handling real value.
   limits: {
     maxSendAmount: Number(process.env.MAX_SEND_AMOUNT || 1000),
@@ -65,18 +64,6 @@ module.exports = {
     r2Bucket: process.env.CLOUDFLARE_R2_BUCKET,
     r2AccessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID,
     r2SecretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-  },
-  walletProvider: process.env.SETTLEMENT_CHAIN || 'lisk',
-  provider: {
-    engineUrl: process.env.PROVIDER_ENGINE_URL,
-    accessToken: process.env.PROVIDER_ACCESS_TOKEN,
-    backendWalletAddress: process.env.PROVIDER_BACKEND_WALLET_ADDRESS,
-    defaultChain: process.env.PROVIDER_DEFAULT_CHAIN || 'lisk',
-    usdcContractAddress: process.env.PROVIDER_USDC_CONTRACT_ADDRESS,
-  },
-  vendor: {
-    apiUrl: process.env.VENDOR_API_URL || 'https://api.vendor.io',
-    secretKey: process.env.VENDOR_SECRET_KEY,
   },
   // sendam-ai: already-deployed HTTP service that turns free-form chat text
   // into a structured, closed-world intent (POST /decode). Requests are
@@ -115,10 +102,11 @@ module.exports = {
     // ETH — LSK itself lives on the chain as an ordinary ERC-20. Overridable
     // only so a fork with a custom gas token doesn't need a code change.
     nativeSymbol: process.env.LISK_NATIVE_SYMBOL || 'ETH',
-    // A funded, self-custodied Wallet row (see lisk.reader.js) that pays
-    // gas top-ups into user wallets. Create one with
-    // scripts/create-gas-wallet.js. Enough on its own — sendam-paymaster is
-    // optional (see payment/gasTopup.js).
+    // A funded platform wallet that pays gas top-ups into user wallets.
+    // Provision one by asking sendam-custody
+    // for the reserved "system:lisk-gas-wallet" ref, then funding the address
+    // it returns. Enough on its own — sendam-paymaster is optional (see
+    // payment/gasTopup.js).
     gasWalletAddress: process.env.LISK_GAS_WALLET_ADDRESS,
     // Local gas policy, used when sendam-paymaster isn't configured. A USDC
     // transfer here costs roughly 0.0000001 ETH, so the defaults are ~500
@@ -129,6 +117,19 @@ module.exports = {
     // Treasury the in-chat testnet faucet drips USDC.e from. Defaults to the
     // gas wallet, so one funded system wallet covers both jobs.
     faucetWalletAddress: process.env.LISK_FAUCET_WALLET_ADDRESS,
+  },
+  // sendam-custody: private HTTP microservice that generates and holds every
+  // wallet signing key, and is the only process that signs a transfer. Same
+  // x-sendam-signature HMAC contract as sendam-ai.
+  //
+  // Not optional in any deployment that moves money: without it wallets cannot
+  // be created and transfers cannot be signed. There is deliberately no local
+  // fallback — a fallback would mean a key in this process, which is the exact
+  // thing this boundary exists to prevent.
+  custody: {
+    baseUrl: process.env.CUSTODY_BASE_URL,
+    signingSecret: process.env.CUSTODY_SIGNING_SECRET,
+    timeoutMs: Number(process.env.CUSTODY_TIMEOUT_MS) || 20000,
   },
   // sendam-paymaster: private HTTP microservice that plans (never submits)
   // gas/fee sponsorship. Same x-sendam-signature HMAC contract as sendam-ai.
@@ -149,10 +150,10 @@ module.exports = {
     treasuryUserId: process.env.SETTLEMENT_TREASURY_USER_ID || 'treasury',
   },
   // In-chat testnet funding ("fund me"). Users cannot fund their own wallets:
-  // the keys are generated and held encrypted by this backend, so the usual
+  // the keys live in sendam-custody and are never handed out, so the usual
   // faucet-then-bridge errand isn't open to them. This closes that gap.
   //
-  // Hard-gated to testnet chain ids in faucet.service.js regardless of
+  // Hard-gated to testnet chain ids in faucet/faucet.service.js regardless of
   // this flag — on mainnet it would be an open drain on real funds for anyone
   // able to send a WhatsApp message.
   faucet: {
@@ -160,10 +161,6 @@ module.exports = {
     amount: process.env.TESTNET_FAUCET_AMOUNT || '10',
     cooldownHours: Number(process.env.TESTNET_FAUCET_COOLDOWN_HOURS || 24),
     maxPerUser: Number(process.env.TESTNET_FAUCET_MAX_PER_USER || 5),
-  },
-  chain: {
-    network: process.env.CHAIN_NETWORK || 'testnet',
-    rpcUrl: process.env.CHAIN_HORIZON_URL || 'https://rpc-testnet.chain.org',
   },
   pricing: {
     coinGeckoBaseUrl: process.env.COINGECKO_BASE_URL || 'https://api.coingecko.com/api/v3',
