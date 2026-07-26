@@ -7,9 +7,8 @@ node_modules/
 !.env.example
 !.env.local.example
 
-# Next.js
-.next/
-out/
+# Build output
+dist/
 
 # Logs
 *.log
