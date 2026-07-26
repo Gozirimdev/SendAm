@@ -59,4 +59,4 @@ Before any real-money launch:
 
 - Use **Lisk Sepolia testnet** for development; never use real funds.
 - Never commit secrets, private keys, access tokens, or `.env` files.
-- Do not expose encrypted references in API responses or logs.
+- Do not expose credentials or key material in API responses or logs.

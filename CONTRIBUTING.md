@@ -146,7 +146,7 @@ Backend expectations:
 - Put reusable business logic in services.
 - Validate user input before using it in chain or database operations.
 - Return consistent API responses.
-- Do not expose encrypted references in API responses.
+- Do not expose credentials or key material in API responses.
 
 Frontend expectations:
 
