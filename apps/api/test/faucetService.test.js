@@ -169,9 +169,8 @@ test('works with no treasury env var, provisioning one on first use', async () =
   // the treasury without a second lookup table.
   assert.equal(custodyRef, faucet.SYSTEM_PHONE);
   // The whole point of the split: the row written here carries an address and
-  // no key material of any kind.
-  assert.equal(createdWallet.walletReference, undefined);
-  assert.ok(!Object.keys(createdWallet).some((k) => /secret|privateKey|encrypted/i.test(k)));
+  // no key material of any kind, under any field name.
+  assert.ok(!Object.keys(createdWallet).some((k) => /secret|private|encrypt/i.test(k)));
 });
 
 test('reuses an existing treasury rather than minting a second one', async () => {

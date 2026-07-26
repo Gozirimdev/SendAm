@@ -32,7 +32,6 @@ testnet deployment indefinitely.
 | Source | Notes |
 | --- | --- |
 | [Superchain Faucet](https://console.optimism.io/faucet) | Supports Lisk Sepolia directly. Up to 0.2 ETH/day with onchain identity auth. **Easiest.** |
-| [provider](https://provider.com/lisk-sepolia-testnet) | 0.01 ETH per claim from the chain page's Faucet section. |
 | [L2 Faucet](https://www.l2faucet.com/lisk) | Device attestation, no bridging. *Was under maintenance at time of writing.* |
 | Bridge | Get Sepolia ETH ([Chainlink faucet](https://faucets.chain.link/sepolia)), then bridge via [sepolia-bridge.lisk.com](https://sepolia-bridge.lisk.com/). |
 
