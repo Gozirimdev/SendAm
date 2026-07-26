@@ -43,7 +43,7 @@ const post = async (path, payload, { idempotencyKey } = {}) => {
 // sendam-paymaster only *plans* an EVM gas top-up — it never submits a
 // transaction. `currentBalanceWei` must be the sending wallet's current
 // native LSK balance (as a decimal wei string); the caller is responsible
-// for actually executing the returned plan (see lisk.reader.js#sendNative).
+// for actually executing the returned plan (see custody.client.js#transferNative).
 const planGasTopup = async ({ address, currentBalanceWei, idempotencyKey }) => {
   const data = await post(
     '/sponsor',

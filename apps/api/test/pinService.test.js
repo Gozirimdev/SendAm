@@ -1,7 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-process.env.SERVICE_SECRET = process.env.SERVICE_SECRET || 'a'.repeat(64);
 process.env.PIN_PEPPER = process.env.PIN_PEPPER || 'test-pepper';
 
 const { hashPin, verifyPin } = require('../src/compliance/pin.service');

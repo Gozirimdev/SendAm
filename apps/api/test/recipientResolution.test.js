@@ -1,9 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
 
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://user:pass@localhost:5432/test';
-process.env.SERVICE_SECRET = process.env.SERVICE_SECRET || crypto.randomBytes(32).toString('hex');
 
 const stubModule = (path, stub) => {
   const resolved = require.resolve(path);

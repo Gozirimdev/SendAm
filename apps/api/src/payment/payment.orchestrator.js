@@ -1,4 +1,4 @@
-const walletService = require('../wallet/account.service');
+const walletService = require('../account/account.service');
 const { selectRail } = require('../blockchain/railSelector');
 const { createQuote } = require('../pricing/pricing.service');
 const { writeAuditLog } = require('../common/audit.service');
@@ -41,10 +41,20 @@ const executePayment = async ({
   if (!senderUser) throw new Error('Sender not found.');
 
   const rail = selectRail({ sourceCountry, destinationCountry, routeType, forceRail });
+
+  // Whether this is a cross-border payment is a fact about the countries, not
+  // about which rail carries it. Deriving it from the countries directly keeps
+  // the compliance classification correct now that every rail settles on Lisk,
+  // instead of quietly applying domestic limits to a cross-border transfer.
+  const effectiveRouteType =
+    routeType || (String(sourceCountry).toUpperCase() !== String(destinationCountry).toUpperCase()
+      ? 'cross_border'
+      : 'domestic');
+
   const compliance = await enforceTransactionPolicy({
     user: senderUser,
     amount,
-    routeType: routeType || (rail === 'chain' ? 'cross_border' : 'domestic'),
+    routeType: effectiveRouteType,
     destinationCountry,
   });
   const wallet = await walletService.createOrGetWallet({ user: senderUser });
@@ -66,7 +76,7 @@ const executePayment = async ({
       recipientPhoneNumber,
       destination,
       rail,
-      routeType: routeType || (rail === 'chain' ? 'cross_border' : 'domestic'),
+      routeType: effectiveRouteType,
       quoteId: quote.id,
       status: 'processing',
       metadata: {
@@ -79,7 +89,7 @@ const executePayment = async ({
 
   try {
     if (rail === 'lisk') {
-      // Self-custody has no relayer sponsoring gas — top up the sending
+      // Custodied wallets have no relayer sponsoring gas — top up the sending
       // wallet's native ETH first, or the transfer below simply reverts.
       await ensureGas({ wallet, idempotencyKey: transaction.id });
 
@@ -102,36 +112,26 @@ const executePayment = async ({
         );
       }
 
+      // The Transaction row's id is the idempotency key custody signs against:
+      // one payment, one key, so a retried request can never become a second
+      // on-chain transfer.
       const result = await walletService.sendToken({
         wallet,
-        chain: config.lisk.chainId,
         destination,
         amount,
         tokenAddress: config.lisk.usdcContractAddress,
+        idempotencyKey: transaction.id,
       });
       transaction = await prisma.transaction.update({
         where: { id: transaction.id },
         data: {
           status: 'success',
-          providerTransactionId: result.queueId || result.id,
-          txHash: result.transactionHash || result.txHash,
+          txHash: result.transactionHash,
         },
       });
       // Fire-and-record: recordFeeReconciliation catches and logs its own
       // errors, so a settlement outage never gates the payment response.
       recordFeeReconciliation({ transaction });
-    } else if (rail === 'chain') {
-      transaction = await prisma.transaction.update({
-        where: { id: transaction.id },
-        data: {
-          status: 'pending',
-          metadata: {
-            ...transaction.metadata,
-            corridor: 'chain',
-            note: 'chain corridor adapter requires regulated partner or custody configuration before live execution.',
-          },
-        },
-      });
     } else {
       transaction = await prisma.transaction.update({
         where: { id: transaction.id },

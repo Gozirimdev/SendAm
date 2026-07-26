@@ -1,6 +1,6 @@
 const { isValidPhoneNumber, isValidAmount } = require('../utils/validators');
 const { sendSuccess, sendError } = require('../utils/response');
-const walletService = require('../wallet/account.service');
+const walletService = require('../account/account.service');
 const { executePayment } = require('../payment/payment.orchestrator');
 const prisma = require('../common/prisma');
 

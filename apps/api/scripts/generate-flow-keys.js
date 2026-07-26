@@ -5,7 +5,7 @@
  * The public half is uploaded to Meta (it encrypts each Flow's one-time AES
  * key to it); the private half stays in WHATSAPP_FLOW_PRIVATE_KEY and is the
  * only thing that can read a submitted PIN. Anyone holding the private key can
- * decrypt every PIN your users enter — treat it exactly like SERVICE_SECRET.
+ * decrypt every PIN your users enter — treat it like any other signing secret.
  *
  *   node scripts/generate-flow-keys.js                 # unencrypted key
  *   node scripts/generate-flow-keys.js --passphrase X  # passphrase-protected

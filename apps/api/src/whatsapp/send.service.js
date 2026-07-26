@@ -4,7 +4,7 @@ const config = require('../config/env');
 const { executePayment } = require('../payment/payment.orchestrator');
 const { verifyPin } = require('../compliance/pin.service');
 const { isValidPin } = require('../utils/validators');
-const faucet = require('../wallet/faucet.service');
+const faucet = require('../faucet/faucet.service');
 
 // The single place a confirmed payment is actually carried out.
 //

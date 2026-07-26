@@ -2,13 +2,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
 // assistant.service.js requires common/prisma.js, which throws at require-time
-// if DATABASE_URL is unset — set a dummy value before importing, same pattern
-// crypto.test.js uses for SERVICE_SECRET. mapDecodedIntent is a pure function;
-// nothing here ever issues a real query.
+// if DATABASE_URL is unset — set a dummy value before importing.
+// mapDecodedIntent is a pure function; nothing here ever issues a real query.
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://user:pass@localhost:5432/test';
-// account.service.js now requires lisk.reader.js -> secretStore.js, which
-// also throws at require-time if SERVICE_SECRET is unset/wrong length.
-process.env.SERVICE_SECRET = process.env.SERVICE_SECRET || require('node:crypto').randomBytes(32).toString('hex');
 
 const {
   mapDecodedIntent,

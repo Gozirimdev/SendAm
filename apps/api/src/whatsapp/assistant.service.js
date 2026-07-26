@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const walletService = require('../wallet/account.service');
+const walletService = require('../account/account.service');
 const { tokenToNaira } = require('../pricing/pricing.service');
 const { sendTextMessage } = require('../services/whatsapp.service');
 const prisma = require('../common/prisma');
@@ -11,7 +11,7 @@ const { isValidPin } = require('../utils/validators');
 const { resolveDestination, describeFailure } = require('./recipient.service');
 const { confirmPendingSend, clearPendingSend, isExpired } = require('./send.service');
 const pinFlow = require('./pinFlow.service');
-const faucet = require('../wallet/faucet.service');
+const faucet = require('../faucet/faucet.service');
 
 // Matches sendam-ai's default flow token TTL (15 min) — no point outliving
 // the token we'd be resuming.
@@ -393,7 +393,7 @@ const processMessage = async (phoneNumber, whatsappName, text) => {
   }
 
   // Testnet funding on request. Users can't do this themselves — their key is
-  // held encrypted by this backend and never handed out, so the usual
+  // held by sendam-custody and never handed out, so the usual
   // faucet-then-bridge route isn't open to them. Checked before the generic
   // command matching below so "fund me" can't be read as something else.
   if (matchesFundRequest(normalized)) {

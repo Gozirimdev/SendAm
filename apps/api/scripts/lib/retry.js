@@ -6,7 +6,7 @@
 // surfaces it as a bare "request timeout", which in a setup script reads as
 // "this tool is broken" and stops someone in their tracks.
 //
-// src/wallet/lisk.reader.js already does this for the server's own calls; the
+// src/chain/lisk.reader.js already does this for the server's own calls; the
 // scripts build their own providers and so had none of it.
 //
 // Only wraps reads and pre-flight checks. Never wrap a transaction submission:

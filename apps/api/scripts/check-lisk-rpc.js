@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Diagnostic: verifies the exact call path lisk.reader.js getBalance() uses,
+// Diagnostic: verifies the exact call path chain/lisk.reader.js getBalance() uses,
 // step by step, against the configured envs. Run it locally AND on the deploy
 // host (Render shell / `railway run node scripts/check-lisk-rpc.js`) — if it
 // passes locally but fails deployed, the deployment envs are the problem.

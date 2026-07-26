@@ -10,7 +10,6 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "test": "node --test",
-    "gas-wallet:create": "node scripts/create-gas-wallet.js",
     "wallet:check": "node scripts/check-wallet-funding.js",
     "bridge:usdc": "node scripts/bridge-usdc-to-lisk.js",
     "fund:user": "node scripts/fund-user.js"
@@ -19,7 +18,6 @@
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@simplewebauthn/server": "^13.3.2",
-    "@chain/chain-sdk": "^12.0.0",
     "axios": "^1.6.8",
     "bullmq": "^5.79.3",
     "cors": "^2.8.5",

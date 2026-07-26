@@ -1,13 +1,14 @@
 const { ethers } = require('ethers');
 const config = require('../config/env');
-const lisk = require('../wallet/lisk.reader');
+const lisk = require('../chain/lisk.reader');
+const custody = require('../custody/custody.client');
 const paymaster = require('../paymaster/paymaster.client');
 const logger = require('../utils/logger');
 
-// Self-custodied Lisk wallets have no relayer: the sending address must hold
-// native ETH to pay gas, or the token transfer simply reverts. (Gas on Lisk is
-// ETH — it is an OP Stack L2 and inherits L1's native currency. LSK itself is
-// an ordinary ERC-20 here and cannot pay for anything.)
+// Custodied Lisk wallets have no relayer: the sending address must hold native
+// ETH to pay gas, or the token transfer simply reverts. (Gas on Lisk is ETH —
+// it is an OP Stack L2 and inherits L1's native currency. LSK itself is an
+// ordinary ERC-20 here and cannot pay for anything.)
 //
 // Two ways to get that ETH into a user's wallet:
 //
@@ -64,7 +65,7 @@ const ensureGas = async ({ wallet, idempotencyKey }) => {
       // Nothing can be done, but say so precisely — this is the single most
       // likely reason a correctly-funded user still can't send.
       logger.warn(
-        'No gas funding is configured: set LISK_GAS_WALLET_ADDRESS (see scripts/create-gas-wallet.js), or configure sendam-paymaster. User wallets with no ETH will fail to send.'
+        'No gas funding is configured: set LISK_GAS_WALLET_ADDRESS, or configure sendam-paymaster. User wallets with no ETH will fail to send.'
       );
       return { toppedUp: false, reason: 'no-gas-funding-configured' };
     }
@@ -91,10 +92,13 @@ const ensureGas = async ({ wallet, idempotencyKey }) => {
     );
   }
 
-  const result = await lisk.sendNative({
-    fromAddress: config.lisk.gasWalletAddress,
-    destination: wallet.address,
+  // Namespaced off the caller's key so a top-up and the payment that triggered
+  // it never collide on one idempotency key inside custody.
+  const result = await custody.transferNative({
+    from: config.lisk.gasWalletAddress,
+    to: wallet.address,
     amountWei: plan.amountWei,
+    idempotencyKey: `${idempotencyKey}:gas-topup`,
   });
 
   logger.info(
@@ -102,7 +106,7 @@ const ensureGas = async ({ wallet, idempotencyKey }) => {
       `(${usingPaymaster ? 'paymaster' : 'local'} policy)`
   );
 
-  return { toppedUp: true, amountWei: plan.amountWei, txHash: result.transactionHash };
+  return { toppedUp: true, amountWei: plan.amountWei, txHash: result.txHash };
 };
 
 module.exports = { ensureGas };

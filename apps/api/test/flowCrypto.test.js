@@ -2,7 +2,6 @@ const test = require('node:test');
 const assert = require('node:assert');
 const crypto = require('node:crypto');
 
-process.env.SERVICE_SECRET = process.env.SERVICE_SECRET || 'a'.repeat(64);
 
 const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
   modulusLength: 2048,

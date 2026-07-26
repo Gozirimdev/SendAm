@@ -6,7 +6,7 @@ const { toMinorUnits } = require('../pricing/pricing.service');
 // Records the platform's fee revenue from a successfully executed on-chain
 // send into sendam-settlement's ledger, purely for internal treasury
 // bookkeeping/reconciliation. The on-chain wallet stays the source of truth
-// for user-facing balances (see account.service.js) — this never gates or
+// for user-facing balances (see account/account.service.js) — this never gates or
 // blocks the payment response, it only logs on failure.
 const recordFeeReconciliation = async ({ transaction }) => {
   if (!settlementClient.configured()) return;

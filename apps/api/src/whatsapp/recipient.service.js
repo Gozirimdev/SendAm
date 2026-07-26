@@ -5,7 +5,7 @@ const { looksLikePhone, phoneCandidates } = require('../utils/phone');
 // Turns whatever the user typed after "to" into a real on-chain destination.
 //
 // Everything downstream — payment.orchestrator -> account.service#sendToken ->
-// lisk.reader's ERC-20 `transfer` — needs a 0x address. Before this module
+// custody's ERC-20 `transfer` — needs a 0x address. Before this module
 // existed the raw text was stored as `destination` verbatim, so "send 5 to
 // 08012345678" reached ethers as a phone number and threw an unhandled
 // "invalid address" *after* the PIN had already been accepted. The user

@@ -1,6 +1,6 @@
 const config = require('../config/env');
 const flowCrypto = require('../whatsapp/flow.crypto');
-const faucet = require('../wallet/faucet.service');
+const faucet = require('../faucet/faucet.service');
 const whatsappService = require('../services/whatsapp.service');
 
 // One place that answers "is this feature actually going to work, and if not
@@ -36,7 +36,7 @@ const readiness = () => ({
     : {
         ready: false,
         reason:
-          'LISK_GAS_WALLET_ADDRESS is not set — new wallets are never funded with ETH, so their first send reverts. Create one with scripts/create-gas-wallet.js',
+          'LISK_GAS_WALLET_ADDRESS is not set — new wallets are never funded with ETH, so their first send reverts. Ask sendam-custody for the reserved "system:lisk-gas-wallet" ref and fund the address it returns.',
       },
 
   // Reports the configured treasury when there is one. Without it the faucet

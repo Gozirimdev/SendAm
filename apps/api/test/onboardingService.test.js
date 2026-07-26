@@ -1,9 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
 
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://user:pass@localhost:5432/test';
-process.env.SERVICE_SECRET = process.env.SERVICE_SECRET || crypto.randomBytes(32).toString('hex');
 
 const stubModule = (path, stub) => {
   const resolved = require.resolve(path);
@@ -14,7 +12,7 @@ const stubModule = (path, stub) => {
 const withStubs = ({ prismaStub, walletServiceStub, sendTextMessageStub }, run) => {
   delete require.cache[require.resolve('../src/config/env')];
   stubModule('../src/common/prisma', prismaStub);
-  if (walletServiceStub) stubModule('../src/wallet/account.service', walletServiceStub);
+  if (walletServiceStub) stubModule('../src/account/account.service', walletServiceStub);
   if (sendTextMessageStub) stubModule('../src/services/whatsapp.service', { sendTextMessage: sendTextMessageStub });
   delete require.cache[require.resolve('../src/onboarding/onboarding.service')];
   const onboardingService = require('../src/onboarding/onboarding.service');

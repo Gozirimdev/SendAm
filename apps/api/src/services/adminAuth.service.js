@@ -3,9 +3,8 @@ const config = require('../config/env');
 
 // Real backend admin auth, replacing the old frontend-only mock login.
 // Tokens are HMAC-SHA256 signed with JWT_SECRET (no external dependency) and
-// carry an expiry. Like secretStore, secrets must be present and fail loud
-// rather than fall back to a guessable default that would leave the admin API
-// effectively open.
+// carry an expiry. Secrets must be present and fail loud rather than fall back
+// to a guessable default that would leave the admin API effectively open.
 if (!config.admin.jwtSecret || config.admin.jwtSecret.length < 32) {
   throw new Error('JWT_SECRET must be set to a strong secret (>= 32 chars). Generate one with: openssl rand -hex 32');
 }

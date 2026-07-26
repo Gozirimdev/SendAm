@@ -1,5 +1,5 @@
 const prisma = require('../common/prisma');
-const walletService = require('../wallet/account.service');
+const walletService = require('../account/account.service');
 const { sendTextMessage } = require('../services/whatsapp.service');
 const { hashPin } = require('../compliance/pin.service');
 const config = require('../config/env');

@@ -101,9 +101,10 @@ const getWallets = async (req, res, next) => {
       }),
       prisma.wallet.count(),
     ]);
+    // No key redaction needed: this process never stores one. Signing keys live
+    // in sendam-custody, and nothing here can read them.
     sendPaginated(res, withIdAliases(wallets.map((wallet) => ({
       ...wallet,
-      walletReference: undefined,
       userId: wallet.user,
     }))), { page, limit, total });
   } catch (error) {
@@ -183,8 +184,7 @@ const getSystemHealth = async (_req, res, next) => {
       database: 'ok',
       queues: process.env.REDIS_URL || process.env.UPSTASH_REDIS_URL ? 'redis-configured' : 'inline-dev-mode',
       primarySettlement: 'lisk',
-      corridorRail: 'chain',
-      walletProvider: 'lisk',
+      walletProvider: 'custody',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

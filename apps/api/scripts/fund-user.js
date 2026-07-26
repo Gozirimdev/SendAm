@@ -12,9 +12,8 @@
  * Why this exists: the in-chat "fund me" faucet needs a treasury address set as
  * an env var on the API, which is no use if you don't control the deployment.
  * This does the same job from your machine — look the user up by phone number,
- * send them gas on Lisk, and bridge them USDC — and needs no deploy, no
- * SERVICE_SECRET, and no central gas payer. Users pay their own gas out of what
- * they're given here.
+ * send them gas on Lisk, and bridge them USDC — and needs no deploy and no
+ * central gas payer. Users pay their own gas out of what they're given here.
  *
  * Two chains are involved because Circle's faucet cannot mint on Lisk:
  *   gas  — sent directly on Lisk Sepolia
@@ -82,8 +81,8 @@ const target = positional();
     process.exit(1);
   }
 
-  // 1. Resolve the recipient. Only reads the address, so this needs no
-  //    SERVICE_SECRET — the user's own key stays sealed in the database.
+  // 1. Resolve the recipient. Only reads the address — the user's signing key
+  //    lives in sendam-custody and is never needed here.
   let recipient = target;
   if (!ethers.isAddress(target)) {
     if (!looksLikePhone(target)) throw new Error(`"${target}" is not a phone number or an address.`);

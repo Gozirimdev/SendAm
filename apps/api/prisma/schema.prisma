@@ -68,20 +68,24 @@ model WebauthnCredential {
   @@index([userId])
 }
 
+// The public side of a wallet: which address belongs to which user. The signing
+// key is not here and never has a column — it lives in sendam-custody, which is
+// the only process that can decrypt or use one. `providerWalletId` holds the
+// custody `ref` (this user's id), which is how the two sides agree on which
+// wallet is which.
 model Wallet {
-  id                 String   @id @default(cuid())
-  userId             String   @unique
-  phoneNumber        String?
-  provider           String   @default("provider")
-  providerWalletId   String?
-  address            String?
-  publicKey          String?
-  walletReference String?
-  primaryChain       String   @default("lisk")
-  supportedChains    String[] @default(["lisk", "chain"])
-  network            String   @default("managed")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  phoneNumber      String?
+  provider         String   @default("custody")
+  providerWalletId String?
+  address          String?
+  publicKey        String?
+  primaryChain     String   @default("lisk")
+  supportedChains  String[] @default(["lisk"])
+  network          String   @default("custody")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

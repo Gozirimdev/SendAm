@@ -1,6 +1,6 @@
-// Lightweight request validators shared across surfaces.
-// chain address validation lives in chain.service (AddressCodec-based) so this
-// module stays free of SDK concerns; import isValidPublicKey from there.
+// Lightweight request validators shared across surfaces. Deliberately free of
+// SDK concerns — chain-specific address validation belongs with the chain code
+// (see chain/lisk.reader.js), not here.
 
 const isValidPhoneNumber = (phone) => {
   return typeof phone === 'string' && phone.trim().length > 5;
