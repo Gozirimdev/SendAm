@@ -8,11 +8,11 @@ const faqs = [
   },
   {
     q: 'Which blockchain does SendAm use?',
-    a: 'Lisk is the primary settlement layer. chain is used only for cross-border corridors where it is the better payment rail.',
+    a: 'Lisk is the settlement layer for every payment, domestic and cross-border alike.',
   },
   {
     q: 'How are wallets managed?',
-    a: 'Every phone number maps to a managed wallet through a wallet provisioning provider such as Provider Engine. The app talks only to SendAm wallet services.',
+    a: 'Every phone number maps to a wallet on Lisk. Signing keys are held by a separate private service, never by the app you interact with.',
   },
   {
     q: 'Is this production-ready today?',

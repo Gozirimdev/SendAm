@@ -1,6 +1,6 @@
 # SendAm Landing Site
 
-The SendAm landing site is a Vite + React marketing page that introduces the product — WhatsApp-first payments on the chain network — and links visitors to the admin dashboard.
+The SendAm landing site is a Vite + React marketing page that introduces the product — WhatsApp-first payments on Lisk — and links visitors to the admin dashboard.
 
 Part of the [SendAm](../../README.md) monorepo.
 

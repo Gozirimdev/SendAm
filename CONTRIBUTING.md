@@ -1,8 +1,8 @@
 # Contributing to SendAm
 
-Thank you for your interest in contributing to SendAm. SendAm is an open-source WhatsApp-first chain payments MVP focused on making blockchain payments easier for mobile-first users.
+Thank you for your interest in contributing to SendAm. SendAm is an open-source WhatsApp-first payments MVP on Lisk, focused on making blockchain payments easier for mobile-first users.
 
-Contributions are welcome across product, engineering, documentation, testing, security, and chain ecosystem integrations.
+Contributions are welcome across product, engineering, documentation, testing, security, and ecosystem integrations.
 
 By participating in this project you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -11,9 +11,9 @@ By participating in this project you agree to abide by our [Code of Conduct](COD
 SendAm currently focuses on:
 
 - WhatsApp-based wallet commands.
-- chain Testnet wallet creation.
-- Native TOKEN balance checks.
-- Native TOKEN transfers.
+- Wallet provisioning through the private custody service.
+- Token balance checks.
+- Token transfers.
 - Saved recipient aliases.
 - Confirmation-based payment flow.
 - Admin visibility for users, wallets, and transactions.
@@ -28,7 +28,7 @@ Good first areas include:
 - Add tests for parser, wallet, webhook, and transaction flows.
 - Improve frontend accessibility and responsiveness.
 - Add clearer API documentation.
-- Improve input validation for chain addresses, amounts, and phone numbers.
+- Improve input validation for addresses, amounts, and phone numbers.
 - Add transaction receipt and explorer improvements.
 - Improve admin dashboard usability.
 - Add deployment and environment setup docs.
@@ -39,7 +39,7 @@ Larger areas include:
 - Per-user authentication for the REST wallet API.
 - Managed secret/key management (KMS/HSM) and key rotation.
 - Audit logging, monitoring, and alerting.
-- chain asset support beyond native TOKEN.
+- Support for tokens beyond USDC.
 - Contact and recipient management.
 - QR-code wallet sharing.
 - Compliance-aware production workflows.
@@ -51,7 +51,7 @@ Larger areas include:
 - Node.js 18 or newer.
 - npm.
 - MongoDB running locally or a MongoDB connection URI.
-- chain Testnet configuration.
+- Lisk Sepolia testnet configuration.
 - WhatsApp Business Cloud API credentials if testing webhooks.
 
 ### Install Dependencies
@@ -199,17 +199,19 @@ Do not open public issues for serious security vulnerabilities involving:
 
 Instead, contact the maintainers privately if a security contact is available. If not, open a minimal issue saying you found a security concern and avoid posting exploit details publicly.
 
-## chain-Specific Contribution Notes
+## Chain-Specific Contribution Notes
 
-When contributing chain functionality:
+When contributing on-chain functionality:
 
-- Use chain Testnet for development.
+- Use Lisk Sepolia testnet for development.
 - Do not use real funds in development.
-- Validate public keys before submitting transactions.
+- Validate addresses before submitting transactions.
 - Store transaction hashes when payments are submitted.
-- Include chain Expert links where useful.
-- Be careful with custody-related changes.
-- Document any assumptions around assets, issuers, trustlines, or anchors.
+- Include block explorer links where useful.
+- Signing keys live in a separate private custody service. This repository must
+  never gain the ability to generate, store, or use one — a change that puts key
+  material back in this process will not be accepted.
+- Document any assumptions around tokens, decimals, and gas.
 
 ## Documentation Contributions
 
@@ -223,7 +225,7 @@ Useful docs contributions include:
 - Deployment guides.
 - Architecture diagrams.
 - Security and compliance notes.
-- chain integration explanations.
+- Chain integration explanations.
 
 ## License
 

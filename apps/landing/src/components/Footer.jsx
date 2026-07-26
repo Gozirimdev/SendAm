@@ -1,4 +1,4 @@
-import { ADMIN_URL, GITHUB_URL, CHAIN_URL, whatsappUrl } from '@/lib/links.js';
+import { ADMIN_URL, GITHUB_URL, LISK_URL, whatsappUrl } from '@/lib/links.js';
 
 const columns = [
   {
@@ -13,7 +13,7 @@ const columns = [
     title: 'Developers',
     links: [
       { label: 'GitHub', href: GITHUB_URL, external: true },
-      { label: 'chain', href: CHAIN_URL, external: true },
+      { label: 'Lisk', href: LISK_URL, external: true },
       { label: 'Admin dashboard', href: ADMIN_URL },
     ],
   },
@@ -29,7 +29,7 @@ export default function Footer() {
             <span>SendAm</span>
           </div>
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-slate-500">
-            WhatsApp-first payments powered by the chain network.
+            WhatsApp-first payments powered by Lisk.
           </p>
           <a
             href={whatsappUrl('create wallet')}
@@ -69,7 +69,7 @@ export default function Footer() {
         <div className="container mx-auto flex flex-col gap-2 px-4 py-6 text-center text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:text-left">
           <p>&copy; {new Date().getFullYear()} SendAm. All rights reserved.</p>
           <p className="text-xs text-slate-400">
-            MVP on chain Testnet — not for real-money use yet.
+            MVP on Lisk Sepolia testnet — not for real-money use yet.
           </p>
         </div>
       </div>

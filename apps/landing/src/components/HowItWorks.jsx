@@ -14,7 +14,7 @@ const steps = [
   {
     n: '3',
     title: 'Settle quietly',
-    desc: 'The orchestrator picks Lisk, chain, or ramp partners while the user sees one clean receipt.',
+    desc: 'The orchestrator picks Lisk or a ramp partner while the user sees one clean receipt.',
     command: 'Receipt ready',
   },
 ];

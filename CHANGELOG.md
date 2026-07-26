@@ -10,29 +10,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Code of Conduct (Contributor Covenant 2.1).
-- Payment submission retry on chain `tx_bad_seq` to handle concurrent sends
-  from the same account.
 - Unit tests for transfer guardrails, recipient resolution, and request
   validators.
+- Multi-token balance view: the `balance` command lists every token a wallet
+  holds, with naira values, falling back to a direct on-chain USDC read if the
+  explorer is unavailable.
+- Transfer preflight that distinguishes "not enough USDC" from "not enough ETH
+  for gas" before submitting, so the user is told which one it actually was.
+- `GET /health/lisk` diagnostic that reports which step of a balance lookup
+  fails (env, RPC reachability, contract, read), for diagnosing a deployment
+  without shell access.
+- In-chat testnet funding: "fund me" drips test USDC from a platform treasury,
+  topping up gas in the same step.
 
 ### Changed
 
+- **Wallet signing keys are no longer held by this service.** They are
+  generated, stored, and used only inside a private custody service, which this
+  API reaches over HMAC-authenticated HTTP. The API now holds no key material,
+  has no way to decrypt any, and the `Wallet` table has no column for one.
+  Requires `CUSTODY_BASE_URL` and `CUSTODY_SIGNING_SECRET`.
+- Transfers now carry an idempotency key (the transaction id), so a replayed
+  request cannot become a second on-chain transfer.
+- Every on-chain route settles on Lisk. The separate cross-border rail was
+  removed — nothing executed behind it, so routing to it produced a payment that
+  silently never landed. Cross-border is still tracked as a distinct `routeType`
+  for compliance limits, derived from the countries rather than the rail.
+- Onboarding is a browser step: a single-use expiring link collects a name,
+  terms acceptance, and a PIN (plus an optional passkey) before the wallet is
+  provisioned.
 - HTTP request logging now uses the `combined` Morgan format in production
   (`dev` elsewhere) for production-grade access logs.
-- The REST `POST /api/wallet/create` endpoint now marks the wallet as funded on
-  successful faucet funding, matching the WhatsApp flow.
+- Prisma migrations were squashed to a single baseline; databases created before
+  it must be reset.
+
+### Removed
+
+- The fixed command vocabulary of the original wallet bot. None of it was
+  reachable — conversational intent handling replaced it.
 
 ## [1.0.0]
 
 ### Added
 
-- WhatsApp-first wallet experience: `create wallet`, `fund`, `balance`,
-  `save <alias> <key>`, `contacts`, `send <amount> token <recipient>`, and
-  `yes`/`no` confirmation flow.
-- chain Testnet wallet creation with faucet funding (retry with backoff and
-  a `fund` recovery command).
-- Native TOKEN balance checks and payments through rpc, with chain Expert
-  receipt links stored for auditability.
+- WhatsApp-first wallet experience with a confirmation flow for transfers.
+- Balance checks and payments on-chain, with explorer receipt links stored for
+  auditability.
 - Saved recipient aliases for repeat payments.
 - Confirmation-based transfers with an upfront balance check and a 10-minute
   pending-transfer expiry.
@@ -43,8 +66,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- Authenticated authenticated encryption encryption of wallet secrets; no fallback key
-  (fails fast at startup if `SERVICE_SECRET` is missing or invalid).
 - Admin authentication via HMAC-signed, expiring session tokens; the API refuses
   to start without `ADMIN_PASSWORD` and `JWT_SECRET`.
 - WhatsApp webhook signature verification against `X-Hub-Signature-256`
@@ -53,8 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retries.
 - Per-user transfer guardrails: per-transaction cap plus rolling 24h amount and
   count limits.
-- CORS allowlist enforced in production and Mongo-backed rate limiting shared
-  across instances.
+- CORS allowlist enforced in production and PostgreSQL-backed rate limiting
+  shared across instances.
 
 ### Operations
 

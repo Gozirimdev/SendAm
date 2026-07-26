@@ -4,13 +4,13 @@ SendAm handles wallet keys and money movement, so we take security seriously eve
 
 ## Supported Status
 
-SendAm is currently a **chain Testnet MVP**. It is not configured for real-money production use. Testnet TOKEN has no monetary value, but real user data (e.g. phone numbers) may be present, so please treat security issues with appropriate care.
+SendAm is currently a **Lisk Sepolia testnet MVP**. It is not configured for real-money production use. Testnet funds have no monetary value, but real user data (e.g. phone numbers) may be present, so please treat security issues with appropriate care.
 
 ## Reporting a Vulnerability
 
 **Do not open a public issue for serious vulnerabilities**, including:
 
-- chain reference exposure or weaknesses in key encryption/handling.
+- Anything that could expose a wallet signing key, or weaknesses in how this API talks to the custody service.
 - Authentication bypass (admin auth, webhook signature verification).
 - Admin API route exposure.
 - Transaction-signing or transfer-authorization vulnerabilities.
@@ -35,11 +35,11 @@ Please include, when you can: affected component, reproduction steps, impact, an
 
 Already in place:
 
-- **Authenticated encryption** of wallet secrets with authenticated encryption (tamper-detecting). No fallback key — a missing/invalid `SERVICE_SECRET` fails loudly at startup.
+- **No wallet signing keys in this service.** Keys are generated, held, and used only inside the private custody service; this API holds no key material and has no way to decrypt any. Requests to it are HMAC-SHA256 signed over the raw body, and transfers require an idempotency key so a replayed request cannot become a second transfer.
 - **Admin authentication** via HMAC-signed, expiring session tokens. The API refuses to start without `ADMIN_PASSWORD` and `JWT_SECRET`; the login endpoint is rate-limited and all admin data routes require a valid Bearer token.
 - **WhatsApp webhook signature verification** against the `X-Hub-Signature-256` header, fail-closed in production.
 - **Idempotency** on inbound WhatsApp messages to prevent duplicate transfers from webhook retries.
-- **Input validation** of chain public keys, amounts, and phone numbers on every surface.
+- **Input validation** of addresses, amounts, and phone numbers on every surface.
 - **Transfer guardrails**: per-transaction cap plus rolling 24h amount and count limits, with an upfront balance check.
 - **CORS allowlist** enforced in production and **Mongo-backed rate limiting** shared across instances (per-IP REST, per-sender WhatsApp).
 - The **unauthenticated REST wallet API** is disabled in production by default (`ENABLE_WALLET_REST_API`); WhatsApp is the signature-verified product surface.
@@ -48,8 +48,8 @@ Already in place:
 
 Before any real-money launch:
 
-- Migrate from chain Testnet to mainnet with a vetted deployment.
-- Replace the single static `SERVICE_SECRET` with managed key management (KMS/HSM) and key rotation.
+- Migrate from Lisk Sepolia testnet to mainnet with a vetted deployment.
+- Replace the custody service's single static encryption key with managed key management (KMS/HSM) and key rotation.
 - Add per-user authentication to the REST wallet API (or keep it disabled).
 - Replace the single shared admin password with real admin accounts and roles.
 - Add audit logging for sensitive actions, plus monitoring and alerting.
@@ -57,6 +57,6 @@ Before any real-money launch:
 
 ## Responsible Use During Development
 
-- Use chain **Testnet** for development; never use real funds.
+- Use **Lisk Sepolia testnet** for development; never use real funds.
 - Never commit secrets, private keys, access tokens, or `.env` files.
 - Do not expose encrypted references in API responses or logs.

@@ -30,6 +30,6 @@ What actually happened (include error messages / logs if relevant).
 - Surface: WhatsApp bot / REST API / admin dashboard / landing
 - OS:
 - Node version:
-- chain network: testnet
+- Network: Lisk Sepolia testnet
 
 ## Additional context

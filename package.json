@@ -2,7 +2,7 @@
   "name": "sendam",
   "version": "1.0.0",
   "license": "MIT",
-  "description": "SendAm - WhatsApp-based chain payment MVP",
+  "description": "SendAm - WhatsApp-based payment MVP on Lisk",
   "homepage": "https://send-am-web.vercel.app/",
   "workspaces": [
     "apps/*",

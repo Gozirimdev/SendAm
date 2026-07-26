@@ -102,16 +102,24 @@ sending wallet before every transfer.
 `sendam-paymaster` does this when configured, but it is **optional** — a funded
 gas wallet is enough on its own:
 
+Ask the custody service for the reserved system wallet — it mints one on first
+request and returns the same address on every later one:
+
 ```bash
-node scripts/create-gas-wallet.js
+curl -X POST "$CUSTODY_BASE_URL/wallets" \
+  -H 'Content-Type: application/json' \
+  -H "x-sendam-signature: $(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$CUSTODY_SIGNING_SECRET" -hex | awk '{print $2}')" \
+  -H "x-sendam-timestamp: $(date +%s)" \
+  -d "$BODY"     # BODY='{"ref":"system:lisk-gas-wallet","chain":"lisk"}'
 ```
 
-This generates a key, stores it encrypted (authenticated encryption under `SERVICE_SECRET`)
-as a `Wallet` row owned by a reserved system user, and prints the address. Then:
+Then:
 
-1. Set `LISK_GAS_WALLET_ADDRESS` to the printed address.
+1. Set `LISK_GAS_WALLET_ADDRESS` to the returned address.
 2. Fund it with ETH from the [Superchain Faucet](https://console.optimism.io/faucet).
-3. Back up the printed private key — it is the only copy outside the database.
+
+There is no private key to back up here — it never leaves the custody service,
+whose database is the thing that needs backing up.
 
 Any user wallet below `LISK_GAS_MIN_BALANCE` (default `0.00005` ETH, ~500
 transfers) is refilled to `LISK_GAS_TOPUP_TO` (default `0.0002` ETH, ~2000
@@ -125,7 +133,7 @@ payment.
 
 If you don't control the API deployment you cannot set env vars, so the in-chat
 faucet below is not available to you. Fund users directly from your own wallet
-instead — no deploy, no central gas payer, no `SERVICE_SECRET`:
+instead — no deploy and no central gas payer:
 
 ```bash
 export FUNDER_PRIVATE_KEY=0x...       # your MetaMask key, never in a file
@@ -175,12 +183,11 @@ use.
 
 ### Setup
 
-**Run `create-gas-wallet.js` where the real `SERVICE_SECRET` is set** — on the
-server, or locally with production env loaded. It writes a wallet whose private
-key is encrypted with that key; created under the wrong one, production can
-never decrypt it and anything you fund it with is stranded. A local `.env` that
-has `DATABASE_URL` but not `SERVICE_SECRET` makes this easy to do by accident,
-so the script refuses to run unless it can decrypt an existing wallet first.
+The treasury is provisioned on demand: the first "fund me" asks the custody
+service for the reserved `system:lisk-gas-wallet` ref and stores the address it
+returns. Because custody is idempotent on that ref, this cannot produce two
+treasuries even if several requests arrive together — so there is no wrong-key
+failure mode and nothing to run by hand.
 
 Check what is and isn't configured at any time:
 
@@ -188,8 +195,8 @@ Check what is and isn't configured at any time:
 curl https://<your-api-host>/health/features
 ```
 
-The treasury defaults to the gas wallet, so if you already ran
-`create-gas-wallet.js` there is nothing new to create — just put USDC.e in it:
+The treasury defaults to the gas wallet, so if one already exists there is
+nothing new to create — just put USDC.e in it:
 
 ```bash
 node scripts/bridge-usdc-to-lisk.js --amount 100 --to <treasury address> --confirm

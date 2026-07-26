@@ -48,7 +48,7 @@ export default function Hero() {
             </li>
             <li className="inline-flex items-center gap-1.5">
               <Zap size={16} className="text-primary" aria-hidden="true" />
-              Lisk + chain rails
+              Lisk rails
             </li>
           </ul>
         </div>

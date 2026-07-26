@@ -45,7 +45,7 @@ export default function Dashboard() {
       <div className="mt-8 sm:mt-12 bg-white p-5 sm:p-8 rounded-2xl border border-gray-100 shadow-sm">
         <h3 className="text-lg font-bold mb-4">Welcome to SendAm Admin</h3>
         <p className="text-gray-600 leading-relaxed max-w-3xl">
-          This dashboard monitors the upgraded SendAm architecture: managed wallets, payment routing, escrow, KYC, cash-out locations, audit logs, and system health. Lisk is the primary settlement layer, while chain is reserved for cross-border corridors.
+          This dashboard monitors the upgraded SendAm architecture: managed wallets, payment routing, escrow, KYC, cash-out locations, audit logs, and system health. Lisk is the settlement layer for every route, domestic and cross-border alike.
         </p>
       </div>
     </div>

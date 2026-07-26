@@ -46,7 +46,7 @@ node scripts/generate-flow-keys.js            # or --passphrase 'your-passphrase
 
 Set `WHATSAPP_FLOW_PRIVATE_KEY` (and `WHATSAPP_FLOW_PRIVATE_KEY_PASSPHRASE` if
 you used one) from the output. **Anyone holding this private key can decrypt
-every PIN your users enter — treat it exactly like `SERVICE_SECRET`.** It must
+every PIN your users enter — treat it like any other signing secret.** It must
 never be committed, logged, or shared.
 
 ### 2. Upload the public key to Meta

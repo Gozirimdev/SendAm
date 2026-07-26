@@ -2,7 +2,7 @@
 
 WhatsApp-first payments with managed wallets, voice-to-cash, escrow, nearby cash-out, and automatic payment-rail routing.
 
-SendAm maps a WhatsApp phone number to a managed wallet and lets users send, receive, escrow, check balances, request receipts, and find cash-out options from chat. The user experience hides blockchain complexity: the backend decides whether a payment should use Lisk, chain corridor rails, or a fiat on/off-ramp provider.
+SendAm maps a WhatsApp phone number to a managed wallet and lets users send, receive, escrow, check balances, request receipts, and find cash-out options from chat. The user experience hides blockchain complexity: the backend decides whether a payment should settle on Lisk or route through a fiat on/off-ramp provider.
 
 > Current status: architecture refactor in progress. The project now has production-oriented module boundaries, queue scaffolding, managed-wallet abstractions, compliance models, and expanded admin surfaces. Live money movement still requires provider credentials, Lisk escrow contracts, KYC/ramp onboarding, monitoring, and compliance review.
 
@@ -12,9 +12,7 @@ SendAm maps a WhatsApp phone number to a managed wallet and lets users send, rec
 - Voice note payment intents with transcription.
 - Phone number as managed wallet identity.
 - Lisk as the primary settlement layer.
-- chain only for cross-border payment corridors.
 - Yellow Card and Paychant for fiat on/off ramp flows.
-- Provider Engine as the preferred wallet provisioning provider.
 - KYC, PIN verification, audit logs, limits, and risk scoring.
 - BullMQ background processing for webhook, voice, receipt, and settlement jobs.
 
@@ -52,9 +50,9 @@ src/
 
 ## Backend Modules
 
-- `wallet`: WalletService abstraction for create/get wallet, send token, balance, and transaction history. App code does not call Provider/Vendor directly.
+- `account`: Maps a user to an address and moves funds. `custody`: HMAC client for the private service that holds every signing key. `chain`: read-only Lisk access. No signing key exists in this repository.
 - `payment`: Payment Orchestrator for quotes, fees, rail selection, transaction execution, and receipts.
-- `blockchain`: Rail selection. Lisk is primary; chain is selected for cross-border routes.
+- `blockchain`: Rail selection. Lisk settles every on-chain route; ramp partners handle fiat.
 - `whatsapp`: Conversational assistant for send money, receive money, balance, escrow, cash-out, contacts, history, and receipts.
 - `voice`: WhatsApp audio download and Deepgram transcription pipeline.
 - `escrow`: Lisk escrow lifecycle scaffolding for create, release, refund, dispute, and arbiter approval.
@@ -108,7 +106,7 @@ POST /webhook
 
 ## Environment Variables
 
-Use `apps/api/.env.example` as the source of truth. The local `apps/api/.env` has been expanded with blank keys for Provider, Lisk, Redis, R2, pricing, KYC, ramps, and voice providers so secrets can be filled in later.
+Use `apps/api/.env.example` as the source of truth. The local `apps/api/.env` has blank keys for custody, Lisk, Redis, R2, pricing, KYC, ramps, and voice providers so secrets can be filled in later.
 
 > The REST wallet API (`/api/wallet/*`) is unauthenticated and is disabled in production unless `ENABLE_WALLET_REST_API=true`. Outside production it defaults to enabled for local testing. WhatsApp is the real, signature-verified surface.
 
@@ -171,7 +169,6 @@ npm run build:admin
 ## Production Readiness Gaps
 
 - Deploy and verify Lisk escrow smart contracts.
-- Finish Provider Engine/Vendor provider-specific transfer implementation.
 - Wire Smile ID or Dojah production KYC callbacks.
 - Wire Yellow Card and Paychant quote/execution callbacks.
 - Apply the Prisma migration to the Neon database and run provider-level smoke tests.
@@ -205,7 +202,7 @@ Backend deployment checklist:
 
 - Provision a PostgreSQL database (e.g. Neon) and set `DATABASE_URL`.
 - Run `npm run prisma:deploy --workspace=apps/api` to apply migrations.
-- Set every required `apps/api` variable — the server **fails fast at startup** without `SERVICE_SECRET`, `JWT_SECRET`, and `ADMIN_PASSWORD`, and rejects unsigned webhooks in production without `WHATSAPP_APP_SECRET`.
+- Set every required `apps/api` variable — the server **fails fast at startup** without `JWT_SECRET` and `ADMIN_PASSWORD`, and rejects unsigned webhooks in production without `WHATSAPP_APP_SECRET`. Wallets need `CUSTODY_BASE_URL` and `CUSTODY_SIGNING_SECRET` pointing at a sendam-custody deployment.
 - Set `NODE_ENV=production` and a `CORS_ORIGINS` allowlist covering the deployed admin/landing URLs.
 - Point the host's health check at `GET /health` (returns 503 if the database link is down).
 - Configure the WhatsApp Business webhook URL to `https://<api-host>/webhook` with a matching `WHATSAPP_VERIFY_TOKEN`.

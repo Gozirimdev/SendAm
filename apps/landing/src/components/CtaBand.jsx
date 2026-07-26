@@ -13,7 +13,7 @@ export default function CtaBand() {
           Try your first transfer in 60 seconds
         </h2>
         <p className="relative mx-auto mt-4 max-w-xl text-slate-300">
-          It's free on testnet. Send one message and watch a chain payment
+          It's free on testnet. Send one message and watch an on-chain payment
           settle in seconds.
         </p>
         <a

@@ -28,7 +28,7 @@ const features = [
   },
   {
     title: 'Multi-chain infrastructure',
-    desc: 'Lisk is the primary settlement layer, with chain reserved for cross-border corridors.',
+    desc: 'Lisk is the settlement layer for every route, domestic and cross-border alike.',
     icon: Network,
   },
 ];

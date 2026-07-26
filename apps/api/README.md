@@ -4,12 +4,15 @@ Express backend for the new SendAm architecture: WhatsApp conversational payment
 
 ## Architecture
 
-The API is moving away from the original chain-only wallet bot. The current backend now routes work through these modules:
+The backend routes work through these modules:
 
 ```text
 src/
   whatsapp/      Conversational assistant
-  wallet/        WalletService abstraction over Provider/Vendor
+  account/       User-to-address mapping and movement
+  custody/       HMAC client for the private custody service
+  chain/         Read-only Lisk access (balances, preflight, health)
+  faucet/        In-chat testnet funding
   payment/       Payment Orchestrator
   escrow/        Lisk escrow lifecycle
   compliance/    KYC tiers, PIN, risk, limits
@@ -23,14 +26,17 @@ src/
 
 ## Payment Rails
 
-- Lisk is the primary settlement layer.
-- chain is reserved for cross-border corridors.
+- Lisk is the settlement layer for every on-chain route, domestic and cross-border alike.
 - Yellow Card and Paychant are intended for NGN/USDC cash-in and cash-out.
 - Users never choose or see the rail; the Payment Orchestrator records it internally.
 
 ## Wallets
 
-`src/wallet/account.service.js` is the only backend surface that should talk to a provisioning provider. Provider Engine is the preferred provider. Vendor is scaffolded as a swappable adapter.
+This service holds **no wallet signing keys**. They are generated, stored, and used only inside the private custody service, which this API reaches over HMAC-authenticated HTTP (`src/custody/custody.client.js`). The API learns an address and a transaction hash; it has no key material and no way to decrypt any.
+
+`src/account/account.service.js` maps a SendAm user to an address and is the only surface that asks custody to provision or move funds. `src/chain/lisk.reader.js` handles everything that needs no key — balances, token listings, transfer preflight, health — against public endpoints.
+
+Wallet provisioning is lazy and idempotent on the user id, so it is safe to call on any message: concurrent requests for one user converge on a single wallet.
 
 ## Queues
 
@@ -41,11 +47,10 @@ WhatsApp webhooks return `200` immediately, then enqueue work through BullMQ whe
 Use `.env.example`. The main provider keys are:
 
 ```text
-PROVIDER_ENGINE_URL=
-PROVIDER_ACCESS_TOKEN=
-PROVIDER_BACKEND_WALLET_ADDRESS=
-PROVIDER_USDC_CONTRACT_ADDRESS=
+CUSTODY_BASE_URL=
+CUSTODY_SIGNING_SECRET=
 LISK_RPC_URL=
+LISK_USDC_CONTRACT_ADDRESS=
 LISK_ESCROW_CONTRACT_ADDRESS=
 REDIS_URL=
 DEEPGRAM_API_KEY=
@@ -61,7 +66,7 @@ EXCHANGERATE_API_KEY=
 - Node.js
 - Express
 - PostgreSQL (Neon) with Prisma
-- `@chain/chain-sdk`, Provider Engine, Vendor
+- `ethers` for read-only chain access
 - WhatsApp Business Cloud API
 - BullMQ / Redis
 - Axios
@@ -77,7 +82,10 @@ apps/api/
     config/        Environment and database configuration
     controllers/   Webhook, wallet, and admin request handlers
     whatsapp/      Conversational assistant
-    wallet/        WalletService abstraction over Provider/Vendor
+    account/       User-to-address mapping and movement
+    custody/       HMAC client for the private custody service
+    chain/         Read-only Lisk access (balances, preflight, health)
+    faucet/        In-chat testnet funding
     payment/       Payment Orchestrator
     escrow/        Lisk escrow lifecycle
     compliance/    KYC tiers, PIN, risk, limits
@@ -173,10 +181,6 @@ MONGODB_URI=mongodb://localhost:27017/sendam
 # REST API CORS allowlist (comma-separated). Required in production.
 CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 
-# Required. 64-char hex (32 bytes) for authenticated encryption wallet-secret encryption.
-# Generate: openssl rand -hex 32
-SERVICE_SECRET=
-
 # Required. Admin dashboard auth. ADMIN_PASSWORD is the login password;
 # JWT_SECRET (>= 32 chars) signs HMAC session tokens.
 ADMIN_PASSWORD=
@@ -190,7 +194,7 @@ WHATSAPP_VERIFY_TOKEN=your_verify_token
 # Required in production. Verifies the X-Hub-Signature-256 header.
 WHATSAPP_APP_SECRET=
 
-# Per-user transfer guardrails (TOKEN)
+# Per-user transfer guardrails (USDC)
 MAX_SEND_AMOUNT=1000
 DAILY_SEND_LIMIT=5000
 MAX_SENDS_PER_DAY=50
@@ -201,19 +205,19 @@ RATE_LIMIT_MAX=100
 BOT_RATE_WINDOW_SEC=60
 BOT_RATE_MAX=20
 
-# chain
-CHAIN_NETWORK=testnet
-CHAIN_HORIZON_URL=https://rpc-testnet.chain.org
+# Required for wallets. Private custody service that holds every signing key.
+# CUSTODY_SIGNING_SECRET must match SERVICE_SIGNING_SECRET on that deployment.
+CUSTODY_BASE_URL=
+CUSTODY_SIGNING_SECRET=
 
 # Optional: expose the unauthenticated REST wallet API (off in prod by default)
 ENABLE_WALLET_REST_API=false
 ```
 
-`SERVICE_SECRET` must be a 64-character hexadecimal string because the app uses **authenticated encryption** (authenticated encryption) for chain references. Generate one with:
+`CUSTODY_SIGNING_SECRET` authenticates this API to the custody service and must match the secret configured there. Generate one with:
 
 ```bash
 openssl rand -hex 32
-# or: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 ## Running Locally
@@ -318,4 +322,4 @@ Before a real-money launch, this backend still needs:
 - Single shared admin password (no per-admin accounts or roles yet).
 - REST wallet API, compliance PIN, and KYC-start endpoints are unauthenticated by design and disabled in production by default (see above) — no working production path until real per-user auth exists.
 - No customer web login/signup — WhatsApp phone number is the identity.
-- chain corridor and fiat ramp execution are stubbed pending provider/custody onboarding.
+- Fiat ramp execution is stubbed pending provider onboarding.
